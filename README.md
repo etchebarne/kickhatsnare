@@ -1,15 +1,6 @@
 # KickHatSnare
 
-KickHatSnare is a Linux desktop digital audio workstation built with Rust, Electron, and React.
-
-The interface runs as a familiar desktop application while audio and application logic stay in a native Rust backend. A typed IPC contract connects the two sides, keeping the experience responsive and the codebase reliable as the project grows.
-
-## Technology
-
-- Rust for the audio engine and application logic
-- Electron and React for the Linux desktop interface
-- TypeScript for a type-safe frontend
-- Bun for frontend tooling and packaging
+KickHatSnare is an intuitive Linux digital audio workstation.
 
 ## Run Locally
 
