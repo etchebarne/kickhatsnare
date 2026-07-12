@@ -1,0 +1,13 @@
+[package]
+name = "kickhatsnare-server"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+kickhatsnare-core = { path = "../core" }
+kickhatsnare-protocol = { version = "0.1.0", path = "../protocol" }
+serde_json = "1.0.150"
+
+[lints]
+workspace = true

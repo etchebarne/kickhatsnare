@@ -1,0 +1,55 @@
+{
+  "name": "@kickhatsnare/desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "KickHatSnare desktop client",
+  "author": "KickHatSnare contributors",
+  "os": [
+    "linux"
+  ],
+  "type": "module",
+  "main": "out/main/index.js",
+  "scripts": {
+    "postinstall": "bun run install:electron",
+    "install:electron": "install-electron --no",
+    "dev": "bun run install:electron && bun run generate:ipc && bun run build:server:debug && electron-vite dev",
+    "start": "bun run install:electron && electron-vite preview",
+    "build": "bun run generate:ipc && bun run build:server && electron-vite build",
+    "package": "bun run build && electron-builder --linux",
+    "package:dir": "bun run build && electron-builder --linux --dir",
+    "build:server": "cargo build --release --manifest-path ../Cargo.toml --package kickhatsnare-server && node scripts/stage-server.mjs",
+    "build:server:debug": "cargo build --manifest-path ../Cargo.toml --package kickhatsnare-server",
+    "generate:ipc": "cargo run --quiet --manifest-path ../Cargo.toml --package kickhatsnare-protocol --bin generate -- src/shared/generated",
+    "check:ipc": "cargo run --quiet --manifest-path ../Cargo.toml --package kickhatsnare-protocol --bin generate -- src/shared/generated --check",
+    "typecheck": "tsc --build --pretty false",
+    "lint": "oxlint .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "check": "bun run check:ipc && bun run typecheck && bun run lint && bun run format:check"
+  },
+  "dependencies": {
+    "ajv": "^8.20.0",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "radix-ui": "^1.6.2",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "tailwind-merge": "^3.6.0",
+    "zustand": "^5.0.14"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.2",
+    "@types/node": "^26.1.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5",
+    "electron": "^43.1.0",
+    "electron-builder": "^26.15.3",
+    "electron-vite": "^5.0.0",
+    "oxfmt": "^0.58.0",
+    "oxlint": "^1.73.0",
+    "tailwindcss": "^4.3.2",
+    "typescript": "^7.0.2",
+    "vite": "^7"
+  }
+}

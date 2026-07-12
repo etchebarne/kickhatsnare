@@ -1,0 +1,21 @@
+{
+  "methods": {
+    "system.ping": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "PingParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "enum": [
+          "ready"
+        ],
+        "title": "PingResult",
+        "type": "string"
+      }
+    }
+  },
+  "protocolVersion": 1
+}

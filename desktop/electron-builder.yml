@@ -1,0 +1,18 @@
+appId: com.kickhatsnare.desktop
+productName: KickHatSnare
+executableName: kickhatsnare
+asar: true
+directories:
+  output: dist
+files:
+  - out/**/*
+  - package.json
+extraResources:
+  - from: build/bin
+    to: bin
+    filter:
+      - "**/*"
+linux:
+  category: Audio
+  target:
+    - AppImage
