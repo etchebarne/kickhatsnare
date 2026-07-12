@@ -141,3 +141,31 @@
 @utility no-drag {
   -webkit-app-region: no-drag;
 }
+
+.project-tree {
+  --trees-accent-override: var(--sidebar-primary);
+  --trees-bg-override: var(--sidebar);
+  --trees-bg-muted-override: var(--sidebar-accent);
+  --trees-border-color-override: var(--sidebar-border);
+  --trees-border-radius-override: var(--radius-sm);
+  --trees-fg-override: var(--sidebar-foreground);
+  --trees-fg-muted-override: color-mix(in oklch, var(--sidebar-foreground) 65%, transparent);
+  --trees-focus-ring-color-override: var(--sidebar-ring);
+  --trees-font-family-override: inherit;
+  --trees-font-size-override: 0.75rem;
+  --trees-input-bg-override: var(--sidebar-accent);
+  --trees-item-margin-x-override: 0.25rem;
+  --trees-padding-inline-override: 0px;
+  --trees-search-bg-override: var(--sidebar-accent);
+  --trees-search-fg-override: var(--sidebar-accent-foreground);
+  --trees-scrollbar-thumb-override: color-mix(in oklch, var(--sidebar-foreground) 20%, transparent);
+  --trees-scrollbar-gutter-override: 0px;
+  --trees-selected-bg-override: var(--sidebar-accent);
+  --trees-selected-fg-override: var(--sidebar-accent-foreground);
+  --trees-selected-focused-border-color-override: var(--sidebar-ring);
+
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
