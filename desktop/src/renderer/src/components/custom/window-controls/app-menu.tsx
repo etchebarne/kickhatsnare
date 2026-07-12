@@ -1,10 +1,10 @@
+import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import {
   Menubar,
   MenubarContent,
   MenubarItem,
   MenubarMenu,
   MenubarSeparator,
-  MenubarShortcut,
   MenubarTrigger,
 } from "@/components/ui/menubar";
 
@@ -18,16 +18,25 @@ export function AppMenu() {
         <MenubarContent>
           <MenubarItem disabled>
             New project
-            <MenubarShortcut>Ctrl+N</MenubarShortcut>
+            <KbdGroup className="ml-auto">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>N</Kbd>
+            </KbdGroup>
           </MenubarItem>
           <MenubarItem disabled>
             Open project
-            <MenubarShortcut>Ctrl+O</MenubarShortcut>
+            <KbdGroup className="ml-auto">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>O</Kbd>
+            </KbdGroup>
           </MenubarItem>
           <MenubarSeparator />
           <MenubarItem disabled>
             Save
-            <MenubarShortcut>Ctrl+S</MenubarShortcut>
+            <KbdGroup className="ml-auto">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>S</Kbd>
+            </KbdGroup>
           </MenubarItem>
           <MenubarItem disabled>Save as...</MenubarItem>
           <MenubarSeparator />
@@ -42,11 +51,18 @@ export function AppMenu() {
         <MenubarContent>
           <MenubarItem disabled>
             Undo
-            <MenubarShortcut>Ctrl+Z</MenubarShortcut>
+            <KbdGroup className="ml-auto">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>Z</Kbd>
+            </KbdGroup>
           </MenubarItem>
           <MenubarItem disabled>
             Redo
-            <MenubarShortcut>Ctrl+Shift+Z</MenubarShortcut>
+            <KbdGroup className="ml-auto">
+              <Kbd>Ctrl</Kbd>
+              <Kbd>Shift</Kbd>
+              <Kbd>Z</Kbd>
+            </KbdGroup>
           </MenubarItem>
           <MenubarSeparator />
           <MenubarItem disabled>Preferences</MenubarItem>
