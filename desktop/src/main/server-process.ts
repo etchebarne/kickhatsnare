@@ -76,6 +76,48 @@ export class CoreServer {
     return this.#request("system.ping", {});
   }
 
+  createWorkspaceDirectory(path: string): Promise<ResultFor<"workspace.createDirectory">> {
+    return this.#request("workspace.createDirectory", { path });
+  }
+
+  deleteWorkspaceEntry(path: string): Promise<ResultFor<"workspace.deleteEntry">> {
+    return this.#request("workspace.deleteEntry", { path });
+  }
+
+  getWorkspace(): Promise<ResultFor<"workspace.get">> {
+    return this.#request("workspace.get", {});
+  }
+
+  importWorkspaceAudio(
+    sourcePaths: string[],
+    targetDirectory: string,
+  ): Promise<ResultFor<"workspace.importAudio">> {
+    return this.#request("workspace.importAudio", { sourcePaths, targetDirectory });
+  }
+
+  moveWorkspaceEntry(
+    sourcePath: string,
+    destinationPath: string,
+  ): Promise<ResultFor<"workspace.moveEntry">> {
+    return this.#request("workspace.moveEntry", { sourcePath, destinationPath });
+  }
+
+  newWorkspace(): Promise<ResultFor<"workspace.new">> {
+    return this.#request("workspace.new", {});
+  }
+
+  openWorkspace(projectFilePath: string): Promise<ResultFor<"workspace.open">> {
+    return this.#request("workspace.open", { projectFilePath });
+  }
+
+  saveWorkspace(): Promise<ResultFor<"workspace.save">> {
+    return this.#request("workspace.save", {});
+  }
+
+  saveWorkspaceAs(directoryPath: string): Promise<ResultFor<"workspace.saveAs">> {
+    return this.#request("workspace.saveAs", { directoryPath });
+  }
+
   stop(): void {
     this.#process?.kill();
     this.#process = null;

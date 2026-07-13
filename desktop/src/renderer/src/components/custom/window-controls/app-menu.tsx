@@ -7,8 +7,17 @@ import {
   MenubarSeparator,
   MenubarTrigger,
 } from "@/components/ui/menubar";
+import { useAppStore } from "@/stores/app-store";
 
 export function AppMenu() {
+  const serverStatus = useAppStore((state) => state.serverStatus);
+  const workspace = useAppStore((state) => state.workspace);
+  const newProject = useAppStore((state) => state.newProject);
+  const openProject = useAppStore((state) => state.openProject);
+  const saveProject = useAppStore((state) => state.saveProject);
+  const saveProjectAs = useAppStore((state) => state.saveProjectAs);
+  const unavailable = serverStatus !== "ready";
+
   return (
     <Menubar className="h-full rounded-none border-0 bg-transparent p-0 shadow-none">
       <MenubarMenu>
@@ -16,14 +25,14 @@ export function AppMenu() {
           File
         </MenubarTrigger>
         <MenubarContent>
-          <MenubarItem disabled>
+          <MenubarItem disabled={unavailable} onSelect={() => void newProject()}>
             New project
             <KbdGroup className="ml-auto">
               <Kbd>Ctrl</Kbd>
               <Kbd>N</Kbd>
             </KbdGroup>
           </MenubarItem>
-          <MenubarItem disabled>
+          <MenubarItem disabled={unavailable} onSelect={() => void openProject()}>
             Open project
             <KbdGroup className="ml-auto">
               <Kbd>Ctrl</Kbd>
@@ -31,14 +40,16 @@ export function AppMenu() {
             </KbdGroup>
           </MenubarItem>
           <MenubarSeparator />
-          <MenubarItem disabled>
+          <MenubarItem disabled={!workspace} onSelect={() => void saveProject()}>
             Save
             <KbdGroup className="ml-auto">
               <Kbd>Ctrl</Kbd>
               <Kbd>S</Kbd>
             </KbdGroup>
           </MenubarItem>
-          <MenubarItem disabled>Save as...</MenubarItem>
+          <MenubarItem disabled={!workspace} onSelect={() => void saveProjectAs()}>
+            Save as...
+          </MenubarItem>
           <MenubarSeparator />
           <MenubarItem onSelect={() => void window.kickHatSnare.closeWindow()}>Exit</MenubarItem>
         </MenubarContent>

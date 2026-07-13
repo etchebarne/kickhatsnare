@@ -1,6 +1,6 @@
 import path from "node:path";
 
-import { app, BrowserWindow, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
 import { ipcChannels } from "../shared/ipc";
 import { CoreServer } from "./server-process";
@@ -45,12 +45,89 @@ function windowForEvent(event: IpcMainInvokeEvent): BrowserWindow | null {
   return BrowserWindow.fromWebContents(event.sender);
 }
 
+function getCoreServer(): CoreServer {
+  if (!coreServer) throw new Error("Core server is not running");
+  return coreServer;
+}
+
+function importWorkspaceAudio(payload: unknown) {
+  if (!payload || typeof payload !== "object") {
+    throw new TypeError("Audio import requires a request payload");
+  }
+  const request = payload as Record<string, unknown>;
+  if (
+    !Array.isArray(request.sourcePaths) ||
+    !request.sourcePaths.every((path) => typeof path === "string") ||
+    typeof request.targetDirectory !== "string"
+  ) {
+    throw new TypeError("Audio import requires file paths and a target directory");
+  }
+
+  return getCoreServer().importWorkspaceAudio(request.sourcePaths, request.targetDirectory);
+}
+
+async function openProject(event: IpcMainInvokeEvent) {
+  const window = windowForEvent(event);
+  if (!window) throw new Error("Project dialog requires an application window");
+
+  const selection = await dialog.showOpenDialog(window, {
+    title: "Open KickHatSnare Project",
+    properties: ["openFile"],
+    filters: [{ name: "KickHatSnare project", extensions: ["khs"] }],
+  });
+  const projectFilePath = selection.filePaths[0];
+  if (selection.canceled || !projectFilePath) return null;
+
+  return getCoreServer().openWorkspace(projectFilePath);
+}
+
+async function saveProjectAs(event: IpcMainInvokeEvent) {
+  const window = windowForEvent(event);
+  if (!window) throw new Error("Project dialog requires an application window");
+
+  const workspace = await getCoreServer().getWorkspace();
+  const selection = await dialog.showSaveDialog(window, {
+    title: "Choose Project Directory",
+    buttonLabel: "Create Project",
+    defaultPath: path.join(app.getPath("documents"), workspace.name),
+    message: "KickHatSnare will create a project directory at this location.",
+    properties: ["createDirectory", "showOverwriteConfirmation"],
+  });
+  if (selection.canceled || !selection.filePath) return null;
+
+  return getCoreServer().saveWorkspaceAs(selection.filePath);
+}
+
+async function saveProject(event: IpcMainInvokeEvent) {
+  const workspace = await getCoreServer().getWorkspace();
+  return workspace.rootPath ? getCoreServer().saveWorkspace() : saveProjectAs(event);
+}
+
 app.whenReady().then(async () => {
   app.setAppUserModelId("com.kickhatsnare.desktop");
 
   coreServer = new CoreServer();
   await coreServer.start();
-  ipcMain.handle(ipcChannels.ping, () => coreServer?.ping());
+  ipcMain.handle(ipcChannels.ping, () => getCoreServer().ping());
+  ipcMain.handle(ipcChannels.workspaceCreateDirectory, (_event, path: string) =>
+    getCoreServer().createWorkspaceDirectory(path),
+  );
+  ipcMain.handle(ipcChannels.workspaceDeleteEntry, (_event, path: string) =>
+    getCoreServer().deleteWorkspaceEntry(path),
+  );
+  ipcMain.handle(ipcChannels.workspaceGet, () => getCoreServer().getWorkspace());
+  ipcMain.handle(ipcChannels.workspaceImportAudio, (_event, payload: unknown) =>
+    importWorkspaceAudio(payload),
+  );
+  ipcMain.handle(
+    ipcChannels.workspaceMoveEntry,
+    (_event, sourcePath: string, destinationPath: string) =>
+      getCoreServer().moveWorkspaceEntry(sourcePath, destinationPath),
+  );
+  ipcMain.handle(ipcChannels.workspaceNew, () => getCoreServer().newWorkspace());
+  ipcMain.handle(ipcChannels.workspaceOpen, openProject);
+  ipcMain.handle(ipcChannels.workspaceSave, saveProject);
+  ipcMain.handle(ipcChannels.workspaceSaveAs, saveProjectAs);
   ipcMain.handle(ipcChannels.windowMinimize, (event) => windowForEvent(event)?.minimize());
   ipcMain.handle(ipcChannels.windowToggleMaximize, (event) => {
     const window = windowForEvent(event);
@@ -69,6 +146,15 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.ping);
+  ipcMain.removeHandler(ipcChannels.workspaceCreateDirectory);
+  ipcMain.removeHandler(ipcChannels.workspaceDeleteEntry);
+  ipcMain.removeHandler(ipcChannels.workspaceGet);
+  ipcMain.removeHandler(ipcChannels.workspaceImportAudio);
+  ipcMain.removeHandler(ipcChannels.workspaceMoveEntry);
+  ipcMain.removeHandler(ipcChannels.workspaceNew);
+  ipcMain.removeHandler(ipcChannels.workspaceOpen);
+  ipcMain.removeHandler(ipcChannels.workspaceSave);
+  ipcMain.removeHandler(ipcChannels.workspaceSaveAs);
   ipcMain.removeHandler(ipcChannels.windowMinimize);
   ipcMain.removeHandler(ipcChannels.windowToggleMaximize);
   ipcMain.removeHandler(ipcChannels.windowClose);

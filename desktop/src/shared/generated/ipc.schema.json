@@ -15,7 +15,462 @@
         "title": "PingResult",
         "type": "string"
       }
+    },
+    "workspace.createDirectory": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "CreateWorkspaceDirectoryParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.deleteEntry": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "DeleteWorkspaceEntryParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.get": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "GetWorkspaceParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.importAudio": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "sourcePaths": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "targetDirectory": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourcePaths",
+          "targetDirectory"
+        ],
+        "title": "ImportWorkspaceAudioParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.moveEntry": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "destinationPath": {
+            "type": "string"
+          },
+          "sourcePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "sourcePath",
+          "destinationPath"
+        ],
+        "title": "MoveWorkspaceEntryParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.new": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "NewWorkspaceParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.open": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "projectFilePath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "projectFilePath"
+        ],
+        "title": "OpenWorkspaceParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.save": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "SaveWorkspaceParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.saveAs": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "directoryPath": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "directoryPath"
+        ],
+        "title": "SaveWorkspaceAsParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
     }
   },
-  "protocolVersion": 1
+  "protocolVersion": 5
 }
