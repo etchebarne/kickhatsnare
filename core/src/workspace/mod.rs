@@ -16,7 +16,7 @@ use timeline::Timeline;
 pub use timeline::{GridDivision, TimelineClipSnapshot, TimelineSnapshot, TimelineTrackSnapshot};
 
 const PROJECT_FILE_NAME: &str = "project.khs";
-const PROJECT_FORMAT_VERSION: u32 = 2;
+const PROJECT_FORMAT_VERSION: u32 = 3;
 const OLDEST_SUPPORTED_PROJECT_FORMAT_VERSION: u32 = 1;
 
 /// Owns the active project session and its persistence operations.
@@ -50,6 +50,34 @@ pub struct WorkspaceSnapshot {
     pub files: Vec<String>,
     pub timeline: TimelineSnapshot,
     pub is_dirty: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaybackProject {
+    pub bpm: f64,
+    pub ticks_per_quarter: u32,
+    pub master_gain_db: f64,
+    pub is_master_muted: bool,
+    pub tracks: Vec<PlaybackTrack>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaybackTrack {
+    pub id: String,
+    pub is_muted: bool,
+    pub is_soloed: bool,
+    pub gain_db: f64,
+    pub pan: f64,
+    pub is_connected: bool,
+    pub clips: Vec<PlaybackClip>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PlaybackClip {
+    pub source_path: PathBuf,
+    pub start_tick: u32,
+    pub duration_ticks: u32,
+    pub source_offset_ticks: u32,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -132,6 +160,82 @@ impl Workspaces {
             timeline: self.active.timeline.snapshot(),
             is_dirty: self.active.is_dirty,
         })
+    }
+
+    /// Builds a playback projection with all project-relative sources resolved.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a referenced audio source is missing or outside the workspace.
+    pub fn playback_project(&self) -> Result<PlaybackProject, CoreError> {
+        let timeline = self.active.timeline.snapshot();
+        let tracks = timeline
+            .tracks
+            .iter()
+            .map(|track| {
+                let clips = track
+                    .clips
+                    .iter()
+                    .filter_map(|clip| {
+                        clip.source_path.as_deref().map(|source_path| {
+                            self.resolve_audio_source(source_path)
+                                .map(|source_path| PlaybackClip {
+                                    source_path,
+                                    start_tick: clip.start_tick,
+                                    duration_ticks: clip.duration_ticks,
+                                    source_offset_ticks: clip.source_offset_ticks,
+                                })
+                        })
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
+                Ok(PlaybackTrack {
+                    id: track.id.clone(),
+                    is_muted: track.is_muted,
+                    is_soloed: track.is_soloed,
+                    gain_db: track.gain_db,
+                    pan: track.pan,
+                    is_connected: track.is_connected,
+                    clips,
+                })
+            })
+            .collect::<Result<Vec<_>, CoreError>>()?;
+        Ok(PlaybackProject {
+            bpm: timeline.bpm,
+            ticks_per_quarter: timeline.ticks_per_quarter,
+            master_gain_db: timeline.master_gain_db,
+            is_master_muted: timeline.is_master_muted,
+            tracks,
+        })
+    }
+
+    /// Resolves a workspace-relative audio source for decoding.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the source is invalid, missing, or outside the active workspace.
+    pub fn resolve_audio_source(&self, relative_path: &str) -> Result<PathBuf, CoreError> {
+        let relative_path = validate_entry_path(Path::new(relative_path))?;
+        if let Some(root_path) = self.active.root_path.as_deref() {
+            let path = workspace_entry_path(root_path, &relative_path)?;
+            if !path.is_file() {
+                return Err(CoreError::new(format!(
+                    "audio source is missing: {}",
+                    relative_path.display()
+                )));
+            }
+            return Ok(path);
+        }
+        self.active
+            .pending_imports
+            .iter()
+            .find(|pending| pending.target_path == relative_path)
+            .map(|pending| pending.source_path.clone())
+            .ok_or_else(|| {
+                CoreError::new(format!(
+                    "audio source is missing: {}",
+                    relative_path.display()
+                ))
+            })
     }
 
     /// Materializes the active project in a new workspace directory.
@@ -225,6 +329,7 @@ impl Workspaces {
                 document.format_version
             )));
         }
+        document.timeline.migrate_from(document.format_version);
         document.timeline.ensure_minimum_track()?;
         document.timeline.validate()?;
 
@@ -383,6 +488,11 @@ impl Workspaces {
         relative_path: impl AsRef<Path>,
     ) -> Result<WorkspaceSnapshot, CoreError> {
         let relative_path = validate_entry_path(relative_path.as_ref())?;
+        if self.active.timeline.source_is_referenced(&relative_path) {
+            return Err(CoreError::new(
+                "workspace entry is used by an audio clip and cannot be deleted",
+            ));
+        }
 
         if let Some(root_path) = self.active.root_path.as_deref() {
             let target = workspace_entry_path(root_path, &relative_path)?;
@@ -476,6 +586,12 @@ impl Workspaces {
             })?;
         } else {
             move_unsaved_entry(&mut self.active, &source_path, &destination_path)?;
+        }
+        let source_path_changed = self
+            .active
+            .timeline
+            .move_source_paths(&source_path, &destination_path);
+        if self.active.root_path.is_none() || source_path_changed {
             self.active.is_dirty = true;
         }
 
@@ -511,16 +627,26 @@ impl Workspaces {
     /// # Errors
     ///
     /// Returns an error if the track does not exist or its name is invalid.
+    #[allow(clippy::too_many_arguments)]
     pub fn save_timeline_track(
         &mut self,
         id: Option<&str>,
         name: &str,
         is_muted: bool,
         is_soloed: bool,
+        gain_db: f64,
+        pan: f64,
+        is_connected: bool,
     ) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active
-            .timeline
-            .save_track(id, name, is_muted, is_soloed)?;
+        self.active.timeline.save_track(
+            id,
+            name,
+            is_muted,
+            is_soloed,
+            gain_db,
+            pan,
+            is_connected,
+        )?;
         self.active.is_dirty = true;
         self.snapshot()
     }
@@ -570,6 +696,71 @@ impl Workspaces {
     /// Returns an error if the clip does not exist.
     pub fn delete_timeline_clip(&mut self, id: &str) -> Result<WorkspaceSnapshot, CoreError> {
         self.active.timeline.delete_clip(id)?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Adds a decoded project audio source to a timeline track.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the track, source, or metadata is invalid.
+    #[allow(clippy::too_many_arguments)]
+    pub fn add_audio_clip(
+        &mut self,
+        track_id: &str,
+        source_path: &str,
+        start_tick: u32,
+        name: &str,
+        duration_ticks: u32,
+        sample_rate: u32,
+        channels: u16,
+        duration_seconds: f64,
+        waveform: Vec<f32>,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.resolve_audio_source(source_path)?;
+        self.active.timeline.add_audio_clip(
+            track_id,
+            source_path,
+            name,
+            start_tick,
+            duration_ticks,
+            sample_rate,
+            channels,
+            duration_seconds,
+            waveform,
+        )?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Updates the master output mix.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the gain is outside supported bounds.
+    pub fn set_master_mix(
+        &mut self,
+        gain_db: f64,
+        is_muted: bool,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.timeline.set_master_mix(gain_db, is_muted)?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Persists a channel or master node position.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the node does not exist or the position is invalid.
+    pub fn set_mix_node_position(
+        &mut self,
+        node_id: &str,
+        x: f64,
+        y: f64,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.timeline.set_node_position(node_id, x, y)?;
         self.active.is_dirty = true;
         self.snapshot()
     }
@@ -987,7 +1178,7 @@ mod tests {
             &fs::read_to_string(project_file).expect("project file should be readable"),
         )
         .expect("project should contain JSON");
-        assert_eq!(project["formatVersion"], 2);
+        assert_eq!(project["formatVersion"], 3);
         assert_eq!(project["name"], "First Beat");
         assert_eq!(project["timeline"]["bpm"], 120.0);
     }
@@ -1014,7 +1205,7 @@ mod tests {
     fn rejects_an_unsupported_project_version_without_replacing_the_session() {
         let parent = tempdir().expect("temporary directory should be created");
         let project_file = parent.path().join(PROJECT_FILE_NAME);
-        fs::write(&project_file, r#"{"formatVersion":3,"name":"Future"}"#)
+        fs::write(&project_file, r#"{"formatVersion":4,"name":"Future"}"#)
             .expect("project should be created");
         let mut workspaces = Workspaces::new();
 
@@ -1024,7 +1215,7 @@ mod tests {
 
         assert_eq!(
             error.to_string(),
-            "unsupported project format version 3; expected 1 through 2"
+            "unsupported project format version 4; expected 1 through 3"
         );
         assert_eq!(
             workspaces.snapshot().expect("snapshot should succeed").name,
@@ -1083,6 +1274,45 @@ mod tests {
     }
 
     #[test]
+    fn lays_out_mix_nodes_when_opening_a_version_two_project() {
+        let parent = tempdir().expect("temporary directory should be created");
+        let project_file = parent.path().join(PROJECT_FILE_NAME);
+        fs::write(
+            &project_file,
+            r#"{
+                "formatVersion": 2,
+                "name": "Legacy mix",
+                "timeline": {
+                    "bpm": 120.0,
+                    "timeSignatureNumerator": 4,
+                    "timeSignatureDenominator": 4,
+                    "gridDivision": "quarter",
+                    "isSnapEnabled": true,
+                    "tracks": [
+                        {"id":"track-1","name":"One","isMuted":false,"isSoloed":false,"clips":[]},
+                        {"id":"track-2","name":"Two","isMuted":false,"isSoloed":false,"clips":[]}
+                    ],
+                    "nextTrackId": 3,
+                    "nextClipId": 1
+                }
+            }"#,
+        )
+        .expect("project should be created");
+        let mut workspaces = Workspaces::new();
+
+        let snapshot = workspaces
+            .open(project_file)
+            .expect("version two project should migrate");
+
+        assert!(snapshot.timeline.tracks[0].node_x.abs() < f64::EPSILON);
+        assert!(snapshot.timeline.tracks[0].node_y.abs() < f64::EPSILON);
+        assert!((snapshot.timeline.tracks[1].node_x - 280.0).abs() < f64::EPSILON);
+        assert!(snapshot.timeline.tracks[1].node_y.abs() < f64::EPSILON);
+        assert!((snapshot.timeline.master_node_x - 1_600.0).abs() < f64::EPSILON);
+        assert!((snapshot.timeline.master_node_y - 420.0).abs() < f64::EPSILON);
+    }
+
+    #[test]
     fn saves_and_reopens_timeline_edits() {
         let parent = tempdir().expect("project parent should be created");
         let root = parent.path().join("Arrangement");
@@ -1091,7 +1321,7 @@ mod tests {
             .set_timeline_settings(128.0, 3, 4, GridDivision::Eighth, true)
             .expect("settings should update");
         workspaces
-            .save_timeline_track(None, "Drums", false, false)
+            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0, true)
             .expect("track should save");
         workspaces
             .save_timeline_clip(None, "track-31", "Pattern", 960, 1_920, 0)
@@ -1241,10 +1471,49 @@ mod tests {
             .move_entry("Samples/Kick.wav", "Kick.wav")
             .expect("file should move");
         assert_eq!(moved.files, ["Kick.wav", "Samples/"]);
+        assert!(!moved.is_dirty);
 
         let deleted = workspaces
             .delete_entry("Samples")
             .expect("directory should be deleted");
         assert_eq!(deleted.files, ["Kick.wav"]);
+    }
+
+    #[test]
+    fn updates_referenced_audio_paths_when_saved_entries_move() {
+        let sources = tempdir().expect("source directory should be created");
+        let source = sources.path().join("Kick.wav");
+        fs::write(&source, b"audio").expect("audio source should be created");
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("Source Move");
+        let mut workspaces = Workspaces::new();
+        workspaces.save_as(&root).expect("project should save");
+        workspaces
+            .import_audio_files([source], "")
+            .expect("audio should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "Kick.wav",
+                0,
+                "Kick",
+                1_920,
+                48_000,
+                2,
+                1.0,
+                Vec::new(),
+            )
+            .expect("audio clip should be added");
+        workspaces.save().expect("project should save");
+
+        let moved = workspaces
+            .move_entry("Kick.wav", "Renamed.wav")
+            .expect("audio source should move");
+
+        assert!(moved.is_dirty);
+        assert_eq!(
+            moved.timeline.tracks[0].clips[0].source_path.as_deref(),
+            Some("Renamed.wav")
+        );
     }
 }

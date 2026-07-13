@@ -53,21 +53,21 @@ mod tests {
 
     #[test]
     fn handles_a_ping_request() {
-        let input = b"{\"protocolVersion\":7,\"id\":7,\"method\":\"system.ping\",\"params\":{}}\n";
+        let input = b"{\"protocolVersion\":8,\"id\":7,\"method\":\"system.ping\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":7,\"id\":7,\"result\":\"ready\"}\n"
+            "{\"protocolVersion\":8,\"id\":7,\"result\":\"ready\"}\n"
         );
     }
 
     #[test]
     fn returns_the_initial_workspace_snapshot() {
         let input =
-            b"{\"protocolVersion\":7,\"id\":10,\"method\":\"workspace.get\",\"params\":{}}\n";
+            b"{\"protocolVersion\":8,\"id\":10,\"method\":\"workspace.get\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
@@ -91,20 +91,20 @@ mod tests {
 
     #[test]
     fn returns_the_initial_library_snapshot() {
-        let input = b"{\"protocolVersion\":7,\"id\":11,\"method\":\"library.get\",\"params\":{}}\n";
+        let input = b"{\"protocolVersion\":8,\"id\":11,\"method\":\"library.get\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":7,\"id\":11,\"result\":{\"pinnedFolders\":[]}}\n"
+            "{\"protocolVersion\":8,\"id\":11,\"result\":{\"pinnedFolders\":[]}}\n"
         );
     }
 
     #[test]
     fn routes_timeline_mutations_and_returns_the_updated_project() {
-        let input = b"{\"protocolVersion\":7,\"id\":12,\"method\":\"workspace.saveTimelineTrack\",\"params\":{\"id\":null,\"name\":\"Drums\",\"isMuted\":false,\"isSoloed\":false}}\n";
+        let input = b"{\"protocolVersion\":8,\"id\":12,\"method\":\"workspace.saveTimelineTrack\",\"params\":{\"id\":null,\"name\":\"Drums\",\"isMuted\":false,\"isSoloed\":false,\"gainDb\":0.0,\"pan\":0.0,\"isConnected\":true}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
@@ -125,27 +125,27 @@ mod tests {
     #[test]
     fn routes_feature_domains_independently() {
         let input =
-            b"{\"protocolVersion\":7,\"id\":8,\"method\":\"audio.unknown\",\"params\":{}}\n";
+            b"{\"protocolVersion\":8,\"id\":8,\"method\":\"audio.unknown\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":7,\"id\":8,\"error\":{\"code\":\"METHOD_NOT_FOUND\",\"message\":\"unknown audio method: unknown\"}}\n"
+            "{\"protocolVersion\":8,\"id\":8,\"error\":{\"code\":\"METHOD_NOT_FOUND\",\"message\":\"unknown audio method: unknown\"}}\n"
         );
     }
 
     #[test]
     fn rejects_a_mismatched_protocol_version() {
-        let input = b"{\"protocolVersion\":8,\"id\":9,\"method\":\"system.ping\",\"params\":{}}\n";
+        let input = b"{\"protocolVersion\":9,\"id\":9,\"method\":\"system.ping\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":7,\"id\":9,\"error\":{\"code\":\"PROTOCOL_VERSION_MISMATCH\",\"message\":\"expected protocol version 7, received 8\"}}\n"
+            "{\"protocolVersion\":8,\"id\":9,\"error\":{\"code\":\"PROTOCOL_VERSION_MISMATCH\",\"message\":\"expected protocol version 8, received 9\"}}\n"
         );
     }
 }

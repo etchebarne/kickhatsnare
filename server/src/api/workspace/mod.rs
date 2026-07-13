@@ -1,3 +1,4 @@
+mod add_audio_clip;
 mod create_directory;
 mod delete_entry;
 mod delete_timeline_clip;
@@ -11,15 +12,18 @@ mod save;
 mod save_as;
 mod save_timeline_clip;
 mod save_timeline_track;
+mod set_master_mix;
+mod set_mix_node_position;
 mod set_timeline_settings;
 
-use kickhatsnare_core::workspace::Workspaces;
+use kickhatsnare_core::Core;
 use kickhatsnare_protocol::{
     IpcMethod,
     workspace::{
-        CreateWorkspaceDirectory, DeleteTimelineClip, DeleteTimelineTrack, DeleteWorkspaceEntry,
-        GetWorkspace, ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace, OpenWorkspace,
-        SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs, SetTimelineSettings,
+        AddAudioClip, CreateWorkspaceDirectory, DeleteTimelineClip, DeleteTimelineTrack,
+        DeleteWorkspaceEntry, GetWorkspace, ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace,
+        OpenWorkspace, SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs,
+        SetMasterMix, SetMixNodePosition, SetTimelineSettings,
     },
 };
 use serde_json::Value;
@@ -30,25 +34,44 @@ pub(super) fn dispatch(
     method: &str,
     action: &str,
     params: &Value,
-    workspaces: &mut Workspaces,
+    core: &mut Core,
 ) -> Result<Value, ApiError> {
-    match method {
-        CreateWorkspaceDirectory::NAME => create_directory::handle(params, workspaces),
-        DeleteWorkspaceEntry::NAME => delete_entry::handle(params, workspaces),
-        DeleteTimelineClip::NAME => delete_timeline_clip::handle(params, workspaces),
-        DeleteTimelineTrack::NAME => delete_timeline_track::handle(params, workspaces),
-        GetWorkspace::NAME => get::handle(params, workspaces),
-        ImportWorkspaceAudio::NAME => import_audio::handle(params, workspaces),
-        MoveWorkspaceEntry::NAME => move_entry::handle(params, workspaces),
-        NewWorkspace::NAME => new::handle(params, workspaces),
-        OpenWorkspace::NAME => open::handle(params, workspaces),
-        SaveWorkspace::NAME => save::handle(params, workspaces),
-        SaveWorkspaceAs::NAME => save_as::handle(params, workspaces),
-        SaveTimelineClip::NAME => save_timeline_clip::handle(params, workspaces),
-        SaveTimelineTrack::NAME => save_timeline_track::handle(params, workspaces),
-        SetTimelineSettings::NAME => set_timeline_settings::handle(params, workspaces),
+    let result = match method {
+        AddAudioClip::NAME => add_audio_clip::handle(params, core),
+        CreateWorkspaceDirectory::NAME => create_directory::handle(params, core.workspaces()),
+        DeleteWorkspaceEntry::NAME => delete_entry::handle(params, core.workspaces()),
+        DeleteTimelineClip::NAME => delete_timeline_clip::handle(params, core.workspaces()),
+        DeleteTimelineTrack::NAME => delete_timeline_track::handle(params, core.workspaces()),
+        GetWorkspace::NAME => get::handle(params, core.workspaces()),
+        ImportWorkspaceAudio::NAME => import_audio::handle(params, core.workspaces()),
+        MoveWorkspaceEntry::NAME => move_entry::handle(params, core.workspaces()),
+        NewWorkspace::NAME => new::handle(params, core.workspaces()),
+        OpenWorkspace::NAME => open::handle(params, core.workspaces()),
+        SaveWorkspace::NAME => save::handle(params, core.workspaces()),
+        SaveWorkspaceAs::NAME => save_as::handle(params, core.workspaces()),
+        SaveTimelineClip::NAME => save_timeline_clip::handle(params, core.workspaces()),
+        SaveTimelineTrack::NAME => save_timeline_track::handle(params, core.workspaces()),
+        SetMasterMix::NAME => set_master_mix::handle(params, core.workspaces()),
+        SetMixNodePosition::NAME => set_mix_node_position::handle(params, core.workspaces()),
+        SetTimelineSettings::NAME => set_timeline_settings::handle(params, core.workspaces()),
         _ => Err(ApiError::method_not_found("workspace", action)),
+    };
+    if result.is_ok() {
+        match method {
+            SaveTimelineTrack::NAME | SetMasterMix::NAME => {
+                core.sync_audio_mix().map_err(|error| core_error(&error))?;
+            }
+            AddAudioClip::NAME
+            | DeleteTimelineClip::NAME
+            | DeleteTimelineTrack::NAME
+            | NewWorkspace::NAME
+            | OpenWorkspace::NAME
+            | SaveTimelineClip::NAME
+            | SetTimelineSettings::NAME => core.invalidate_audio(),
+            _ => {}
+        }
     }
+    result
 }
 
 fn serialize_snapshot(
@@ -70,6 +93,10 @@ fn serialize_snapshot(
             time_signature_denominator: snapshot.timeline.time_signature_denominator,
             grid_division: serialize_grid_division(snapshot.timeline.grid_division),
             is_snap_enabled: snapshot.timeline.is_snap_enabled,
+            master_gain_db: snapshot.timeline.master_gain_db,
+            is_master_muted: snapshot.timeline.is_master_muted,
+            master_node_x: snapshot.timeline.master_node_x,
+            master_node_y: snapshot.timeline.master_node_y,
             tracks: snapshot
                 .timeline
                 .tracks
@@ -79,6 +106,11 @@ fn serialize_snapshot(
                     name: track.name,
                     is_muted: track.is_muted,
                     is_soloed: track.is_soloed,
+                    gain_db: track.gain_db,
+                    pan: track.pan,
+                    is_connected: track.is_connected,
+                    node_x: track.node_x,
+                    node_y: track.node_y,
                     clips: track
                         .clips
                         .into_iter()
@@ -88,6 +120,11 @@ fn serialize_snapshot(
                             start_tick: clip.start_tick,
                             duration_ticks: clip.duration_ticks,
                             source_offset_ticks: clip.source_offset_ticks,
+                            source_path: clip.source_path,
+                            source_sample_rate: clip.source_sample_rate,
+                            source_channels: clip.source_channels,
+                            source_duration_seconds: clip.source_duration_seconds,
+                            waveform: clip.waveform,
                         })
                         .collect(),
                 })

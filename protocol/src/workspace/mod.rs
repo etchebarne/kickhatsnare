@@ -1,3 +1,4 @@
+mod add_audio_clip;
 mod create_directory;
 mod delete_entry;
 mod delete_timeline_clip;
@@ -11,8 +12,11 @@ mod save;
 mod save_as;
 mod save_timeline_clip;
 mod save_timeline_track;
+mod set_master_mix;
+mod set_mix_node_position;
 mod set_timeline_settings;
 
+pub use add_audio_clip::{AddAudioClip, AddAudioClipParams};
 pub use create_directory::{CreateWorkspaceDirectory, CreateWorkspaceDirectoryParams};
 pub use delete_entry::{DeleteWorkspaceEntry, DeleteWorkspaceEntryParams};
 pub use delete_timeline_clip::{DeleteTimelineClip, DeleteTimelineClipParams};
@@ -26,6 +30,8 @@ pub use save::{SaveWorkspace, SaveWorkspaceParams};
 pub use save_as::{SaveWorkspaceAs, SaveWorkspaceAsParams};
 pub use save_timeline_clip::{SaveTimelineClip, SaveTimelineClipParams};
 pub use save_timeline_track::{SaveTimelineTrack, SaveTimelineTrackParams};
+pub use set_master_mix::{SetMasterMix, SetMasterMixParams};
+pub use set_mix_node_position::{SetMixNodePosition, SetMixNodePositionParams};
 pub use set_timeline_settings::{SetTimelineSettings, SetTimelineSettingsParams};
 
 use schemars::JsonSchema;
@@ -58,11 +64,15 @@ pub struct TimelineSnapshot {
     #[ts(inline)]
     pub grid_division: GridDivision,
     pub is_snap_enabled: bool,
+    pub master_gain_db: f64,
+    pub is_master_muted: bool,
+    pub master_node_x: f64,
+    pub master_node_y: f64,
     #[ts(inline)]
     pub tracks: Vec<TimelineTrack>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct TimelineTrack {
@@ -70,11 +80,16 @@ pub struct TimelineTrack {
     pub name: String,
     pub is_muted: bool,
     pub is_soloed: bool,
+    pub gain_db: f64,
+    pub pan: f64,
+    pub is_connected: bool,
+    pub node_x: f64,
+    pub node_y: f64,
     #[ts(inline)]
     pub clips: Vec<TimelineClip>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
 pub struct TimelineClip {
@@ -83,6 +98,11 @@ pub struct TimelineClip {
     pub start_tick: u32,
     pub duration_ticks: u32,
     pub source_offset_ticks: u32,
+    pub source_path: Option<String>,
+    pub source_sample_rate: u32,
+    pub source_channels: u16,
+    pub source_duration_seconds: f64,
+    pub waveform: Vec<f32>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
@@ -102,6 +122,7 @@ pub enum GridDivision {
 
 pub(crate) fn methods() -> Vec<ContractMethod> {
     vec![
+        describe::<AddAudioClip>(),
         describe::<CreateWorkspaceDirectory>(),
         describe::<DeleteWorkspaceEntry>(),
         describe::<DeleteTimelineClip>(),
@@ -116,5 +137,7 @@ pub(crate) fn methods() -> Vec<ContractMethod> {
         describe::<SaveTimelineClip>(),
         describe::<SaveTimelineTrack>(),
         describe::<SetTimelineSettings>(),
+        describe::<SetMasterMix>(),
+        describe::<SetMixNodePosition>(),
     ]
 }

@@ -21,4 +21,7 @@ pub struct SaveTimelineTrackParams {
     pub name: String,
     pub is_muted: bool,
     pub is_soloed: bool,
+    pub gain_db: f64,
+    pub pan: f64,
+    pub is_connected: bool,
 }

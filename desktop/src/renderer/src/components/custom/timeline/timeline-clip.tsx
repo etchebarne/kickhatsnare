@@ -3,6 +3,8 @@ import { useEffect, useRef, type PointerEvent } from "react";
 import { cn } from "@/lib/utils";
 import type { SaveTimelineClipParams, WorkspaceSnapshot } from "@shared/ipc";
 
+import { ClipWaveform } from "./clip-waveform";
+
 type TimelineClipData = WorkspaceSnapshot["timeline"]["tracks"][number]["clips"][number];
 type DragMode = "move" | "trim-start" | "trim-end";
 
@@ -25,6 +27,7 @@ interface TimelineClipProps {
   trackId: string;
   pixelsPerTick: number;
   gridTicks: number;
+  sourceDurationTicks: number | null;
   snapEnabled: boolean;
   selected: boolean;
   onSelect(id: string): void;
@@ -37,6 +40,7 @@ export function TimelineClip({
   trackId,
   pixelsPerTick,
   gridTicks,
+  sourceDurationTicks,
   snapEnabled,
   selected,
   onSelect,
@@ -134,7 +138,6 @@ export function TimelineClip({
     const active = drag.current;
     if (!active) return;
     const deltaTicks = (event.clientX - active.originClientX) / pixelsPerTick;
-    const minimumDuration = snapEnabled ? gridTicks : 1;
     const originalEnd = active.startTick + active.durationTicks;
 
     if (active.mode === "move") {
@@ -156,7 +159,14 @@ export function TimelineClip({
     }
 
     if (active.mode === "trim-end") {
-      const endTick = Math.max(active.startTick + minimumDuration, snap(originalEnd + deltaTicks));
+      const maximumEnd =
+        sourceDurationTicks === null
+          ? Number.POSITIVE_INFINITY
+          : active.startTick + sourceDurationTicks - active.sourceOffsetTicks;
+      const endTick = Math.min(
+        maximumEnd,
+        Math.max(active.startTick + 1, snap(originalEnd + deltaTicks)),
+      );
       renderDraft(
         {
           startTick: active.startTick,
@@ -168,15 +178,18 @@ export function TimelineClip({
       return;
     }
 
+    const minimumStart = clip.sourcePath
+      ? Math.max(0, active.startTick - active.sourceOffsetTicks)
+      : 0;
     const nextStart = Math.min(
-      originalEnd - minimumDuration,
-      Math.max(0, snap(active.startTick + deltaTicks)),
+      originalEnd - 1,
+      Math.max(minimumStart, snap(active.startTick + deltaTicks)),
     );
     renderDraft(
       {
         startTick: nextStart,
         durationTicks: originalEnd - nextStart,
-        sourceOffsetTicks: Math.max(0, active.sourceOffsetTicks + nextStart - active.startTick),
+        sourceOffsetTicks: active.sourceOffsetTicks + nextStart - active.startTick,
       },
       active,
     );
@@ -252,6 +265,14 @@ export function TimelineClip({
         onDelete(clip.id);
       }}
     >
+      {clip.sourcePath && sourceDurationTicks ? (
+        <ClipWaveform
+          peaks={clip.waveform}
+          sourceOffsetTicks={clip.sourceOffsetTicks}
+          durationTicks={clip.durationTicks}
+          sourceDurationTicks={sourceDurationTicks}
+        />
+      ) : null}
       <div
         data-edge="start"
         className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize border-l-2 border-transparent group-hover:border-current/40"
@@ -259,7 +280,9 @@ export function TimelineClip({
       <div className="pointer-events-none flex h-full flex-col justify-between px-3 py-2">
         <span className="truncate text-xs font-medium">{clip.name}</span>
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-55">
-          Empty region
+          {clip.sourcePath
+            ? `${clip.sourceSampleRate} Hz / ${clip.sourceChannels === 1 ? "mono" : "stereo"}`
+            : "Empty region"}
         </span>
       </div>
       <div

@@ -37,6 +37,7 @@ const schemaDocument: {
 } = contractSchema;
 const ajv = new Ajv2020({ allErrors: true, strict: true });
 ajv.addFormat("double", { type: "number", validate: Number.isFinite });
+ajv.addFormat("float", { type: "number", validate: Number.isFinite });
 ajv.addFormat("uint8", {
   type: "number",
   validate: (value: number) => Number.isInteger(value) && value >= 0 && value <= 255,
@@ -44,6 +45,10 @@ ajv.addFormat("uint8", {
 ajv.addFormat("uint32", {
   type: "number",
   validate: (value: number) => Number.isInteger(value) && value >= 0 && value <= 4_294_967_295,
+});
+ajv.addFormat("uint16", {
+  type: "number",
+  validate: (value: number) => Number.isInteger(value) && value >= 0 && value <= 65_535,
 });
 const validatorCache = new Map<string, ValidateFunction>();
 
@@ -90,6 +95,26 @@ export class CoreServer {
     return this.#request("system.ping", {});
   }
 
+  getTransport(): Promise<ResultFor<"audio.getTransport">> {
+    return this.#request("audio.getTransport", {});
+  }
+
+  pauseAudio(): Promise<ResultFor<"audio.pause">> {
+    return this.#request("audio.pause", {});
+  }
+
+  playAudio(): Promise<ResultFor<"audio.play">> {
+    return this.#request("audio.play", {});
+  }
+
+  seekAudio(params: ParamsFor<"audio.seek">): Promise<ResultFor<"audio.seek">> {
+    return this.#request("audio.seek", params);
+  }
+
+  stopAudio(): Promise<ResultFor<"audio.stop">> {
+    return this.#request("audio.stop", {});
+  }
+
   getLibrary(): Promise<ResultFor<"library.get">> {
     return this.#request("library.get", {});
   }
@@ -104,6 +129,12 @@ export class CoreServer {
 
   createWorkspaceDirectory(path: string): Promise<ResultFor<"workspace.createDirectory">> {
     return this.#request("workspace.createDirectory", { path });
+  }
+
+  addAudioClip(
+    params: ParamsFor<"workspace.addAudioClip">,
+  ): Promise<ResultFor<"workspace.addAudioClip">> {
+    return this.#request("workspace.addAudioClip", params);
   }
 
   deleteWorkspaceEntry(path: string): Promise<ResultFor<"workspace.deleteEntry">> {
@@ -172,6 +203,18 @@ export class CoreServer {
     params: ParamsFor<"workspace.setTimelineSettings">,
   ): Promise<ResultFor<"workspace.setTimelineSettings">> {
     return this.#request("workspace.setTimelineSettings", params);
+  }
+
+  setMasterMix(
+    params: ParamsFor<"workspace.setMasterMix">,
+  ): Promise<ResultFor<"workspace.setMasterMix">> {
+    return this.#request("workspace.setMasterMix", params);
+  }
+
+  setMixNodePosition(
+    params: ParamsFor<"workspace.setMixNodePosition">,
+  ): Promise<ResultFor<"workspace.setMixNodePosition">> {
+    return this.#request("workspace.setMixNodePosition", params);
   }
 
   stop(): void {

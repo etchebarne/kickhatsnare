@@ -1,11 +1,20 @@
-import { useEffect, useRef, useState, type CSSProperties, type MouseEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type DragEvent,
+  type MouseEvent,
+} from "react";
 import { Plus, Trash2 } from "lucide-react";
 
 import { TimelineClip } from "./timeline-clip";
+import { TimelinePlayhead, TransportPosition } from "./timeline-playhead";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
+import { useTransportStore } from "@/stores/transport-store";
 import type { SaveTimelineClipParams, WorkspaceSnapshot } from "@shared/ipc";
 
 type Timeline = WorkspaceSnapshot["timeline"];
@@ -18,6 +27,7 @@ const MIN_HORIZONTAL_ZOOM = 24;
 const MAX_HORIZONTAL_ZOOM = 768;
 const MIN_TRACK_HEIGHT = 44;
 const MAX_TRACK_HEIGHT = 160;
+const AUDIO_DRAG_TYPE = "application/x-kickhatsnare-audio";
 
 export function TimelineEditor() {
   const workspace = useAppStore((state) => state.workspace);
@@ -25,11 +35,12 @@ export function TimelineEditor() {
   const deleteTimelineTrack = useAppStore((state) => state.deleteTimelineTrack);
   const saveTimelineClip = useAppStore((state) => state.saveTimelineClip);
   const deleteTimelineClip = useAppStore((state) => state.deleteTimelineClip);
+  const addAudioClip = useAppStore((state) => state.addAudioClip);
+  const seek = useTransportStore((state) => state.seek);
   const scrollContainer = useRef<HTMLDivElement>(null);
   const trackHeight = useRef(80);
   const horizontalZoom = useRef(96);
   const [pixelsPerQuarter, setPixelsPerQuarter] = useState(96);
-  const [playheadTick, setPlayheadTick] = useState(0);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const timelineForZoom = workspace?.timeline;
 
@@ -130,7 +141,6 @@ export function TimelineEditor() {
   const totalBars = Math.max(DEFAULT_BARS, Math.ceil(maxClipEnd / ticksPerBar) + 4);
   const totalTicks = totalBars * ticksPerBar;
   const timelineWidth = totalTicks * pixelsPerTick;
-  const playheadLeft = playheadTick * pixelsPerTick;
   const laneStyle = timelineGridStyle(gridTicks, ticksPerBeat, ticksPerBar, pixelsPerTick);
 
   function snapTick(tick: number) {
@@ -140,7 +150,7 @@ export function TimelineEditor() {
 
   function positionPlayhead(event: MouseEvent<HTMLElement>) {
     const bounds = event.currentTarget.getBoundingClientRect();
-    setPlayheadTick(snapTick((event.clientX - bounds.left) / pixelsPerTick));
+    void seek(snapTick((event.clientX - bounds.left) / pixelsPerTick));
   }
 
   function addTrack() {
@@ -149,6 +159,9 @@ export function TimelineEditor() {
       name: `Track ${timeline.tracks.length + 1}`,
       isMuted: false,
       isSoloed: false,
+      gainDb: 0,
+      pan: 0,
+      isConnected: true,
     });
   }
 
@@ -158,6 +171,9 @@ export function TimelineEditor() {
       name: update.name ?? track.name,
       isMuted: update.isMuted ?? track.isMuted,
       isSoloed: update.isSoloed ?? track.isSoloed,
+      gainDb: update.gainDb ?? track.gainDb,
+      pan: update.pan ?? track.pan,
+      isConnected: update.isConnected ?? track.isConnected,
     });
   }
 
@@ -171,7 +187,10 @@ export function TimelineEditor() {
     void deleteTimelineTrack(track.id);
   }
 
-  function addClip(track: TimelineTrack, startTick = playheadTick) {
+  function addClip(
+    track: TimelineTrack,
+    startTick = useTransportStore.getState().transport.positionTick,
+  ) {
     void saveTimelineClip({
       id: null,
       trackId: track.id,
@@ -191,6 +210,21 @@ export function TimelineEditor() {
     void deleteTimelineClip(id);
   }
 
+  function handleAudioDragOver(event: DragEvent<HTMLDivElement>) {
+    if (!event.dataTransfer.types.includes(AUDIO_DRAG_TYPE)) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+  }
+
+  function handleAudioDrop(event: DragEvent<HTMLDivElement>, track: TimelineTrack) {
+    const sourcePath = event.dataTransfer.getData(AUDIO_DRAG_TYPE);
+    if (!sourcePath) return;
+    event.preventDefault();
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const startTick = snapTick((event.clientX - bounds.left) / pixelsPerTick);
+    void addAudioClip({ trackId: track.id, sourcePath, startTick });
+  }
+
   const rulerBars = Array.from({ length: totalBars }, (_, index) => ({
     number: index + 1,
     left: index * ticksPerBar * pixelsPerTick,
@@ -204,6 +238,7 @@ export function TimelineEditor() {
         style={{ "--timeline-track-height": "80px" } as CSSProperties}
       >
         <div className="relative min-h-full" style={{ width: TRACK_HEADER_WIDTH + timelineWidth }}>
+          <TimelinePlayhead leftOffset={TRACK_HEADER_WIDTH} pixelsPerTick={pixelsPerTick} />
           <div
             className="sticky top-0 z-30 grid h-8 border-b border-border bg-card"
             style={{ gridTemplateColumns: `${TRACK_HEADER_WIDTH}px ${timelineWidth}px` }}
@@ -230,12 +265,6 @@ export function TimelineEditor() {
                   {bar.number}
                 </span>
               ))}
-              <div
-                className="pointer-events-none absolute inset-y-0 z-20 w-px bg-foreground"
-                style={{ left: playheadLeft }}
-              >
-                <div className="absolute -left-1 top-0 size-2 rotate-45 bg-foreground" />
-              </div>
             </div>
           </div>
 
@@ -320,6 +349,8 @@ export function TimelineEditor() {
                   const bounds = event.currentTarget.getBoundingClientRect();
                   addClip(track, (event.clientX - bounds.left) / pixelsPerTick);
                 }}
+                onDragOver={handleAudioDragOver}
+                onDrop={(event) => handleAudioDrop(event, track)}
               >
                 {track.clips.map((clip) => (
                   <TimelineClip
@@ -328,6 +359,19 @@ export function TimelineEditor() {
                     trackId={track.id}
                     pixelsPerTick={pixelsPerTick}
                     gridTicks={gridTicks}
+                    sourceDurationTicks={
+                      clip.sourcePath
+                        ? Math.max(
+                            1,
+                            Math.round(
+                              (clip.sourceDurationSeconds *
+                                timeline.bpm *
+                                timeline.ticksPerQuarter) /
+                                60,
+                            ),
+                          )
+                        : null
+                    }
                     snapEnabled={timeline.isSnapEnabled}
                     selected={clip.id === selectedClipId}
                     onSelect={setSelectedClipId}
@@ -335,10 +379,6 @@ export function TimelineEditor() {
                     onDelete={removeClip}
                   />
                 ))}
-                <div
-                  className="pointer-events-none absolute inset-y-0 z-10 w-px bg-foreground/70"
-                  style={{ left: playheadLeft }}
-                />
               </div>
             </div>
           ))}
@@ -349,7 +389,7 @@ export function TimelineEditor() {
         <span>{timeline.tracks.length} tracks</span>
         <span>{timeline.tracks.reduce((count, track) => count + track.clips.length, 0)} clips</span>
         <span>{automaticGrid.label} grid</span>
-        <span>{formatPosition(playheadTick, ticksPerBeat, ticksPerBar)}</span>
+        <TransportPosition />
         <span className="ml-auto hidden md:inline">
           Ctrl+scroll horizontal / Alt+scroll vertical
         </span>
@@ -393,12 +433,4 @@ function timelineGridStyle(
       .map((ticks) => `${ticks * pixelsPerTick}px 100%`)
       .join(","),
   };
-}
-
-function formatPosition(tick: number, ticksPerBeat: number, ticksPerBar: number) {
-  const bar = Math.floor(tick / ticksPerBar) + 1;
-  const withinBar = tick % ticksPerBar;
-  const beat = Math.floor(withinBar / ticksPerBeat) + 1;
-  const beatTick = Math.round(withinBar % ticksPerBeat);
-  return `${bar}.${beat}.${String(beatTick).padStart(3, "0")}`;
 }

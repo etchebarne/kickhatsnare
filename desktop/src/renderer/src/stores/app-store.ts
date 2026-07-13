@@ -1,12 +1,17 @@
 import { create } from "zustand";
 
 import type {
+  AddAudioClipParams,
   LibrarySnapshot,
   SaveTimelineClipParams,
   SaveTimelineTrackParams,
   SetTimelineSettingsParams,
+  SetMasterMixParams,
+  SetMixNodePositionParams,
   WorkspaceSnapshot,
 } from "@shared/ipc";
+
+import { useTransportStore } from "./transport-store";
 
 type ServerStatus = "connecting" | "ready" | "unavailable";
 
@@ -17,6 +22,7 @@ interface AppState {
   operationError: string | null;
   connect(): Promise<void>;
   createWorkspaceDirectory(path: string): Promise<boolean>;
+  addAudioClip(params: AddAudioClipParams): Promise<boolean>;
   deleteWorkspaceEntry(path: string): Promise<boolean>;
   deleteTimelineClip(id: string): Promise<boolean>;
   deleteTimelineTrack(id: string): Promise<boolean>;
@@ -31,6 +37,8 @@ interface AppState {
   saveTimelineClip(params: SaveTimelineClipParams): Promise<boolean>;
   saveTimelineTrack(params: SaveTimelineTrackParams): Promise<boolean>;
   setTimelineSettings(params: SetTimelineSettingsParams): Promise<boolean>;
+  setMasterMix(params: SetMasterMixParams): Promise<boolean>;
+  setMixNodePosition(params: SetMixNodePositionParams): Promise<boolean>;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -55,6 +63,9 @@ export const useAppStore = create<AppState>((set) => ({
   },
   async createWorkspaceDirectory(path) {
     return updateWorkspace(set, () => window.kickHatSnare.createWorkspaceDirectory(path));
+  },
+  async addAudioClip(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.addAudioClip(params));
   },
   async deleteWorkspaceEntry(path) {
     return updateWorkspace(set, () => window.kickHatSnare.deleteWorkspaceEntry(path));
@@ -100,6 +111,12 @@ export const useAppStore = create<AppState>((set) => ({
   async setTimelineSettings(params) {
     return updateWorkspace(set, () => window.kickHatSnare.setTimelineSettings(params));
   },
+  async setMasterMix(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.setMasterMix(params));
+  },
+  async setMixNodePosition(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.setMixNodePosition(params));
+  },
 }));
 
 async function updateLibrary(
@@ -124,7 +141,10 @@ async function updateWorkspace(
   set({ operationError: null });
   try {
     const workspace = await operation();
-    if (workspace) set({ workspace });
+    if (workspace) {
+      set({ workspace });
+      await useTransportStore.getState().refresh();
+    }
     return workspace !== null;
   } catch (error) {
     set({ operationError: errorMessage(error) });

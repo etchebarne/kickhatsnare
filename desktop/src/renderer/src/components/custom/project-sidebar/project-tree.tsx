@@ -46,6 +46,7 @@ const treeStyles = `
 `;
 
 const contextMenuFocusSettleMs = 200;
+const audioDragType = "application/x-kickhatsnare-audio";
 
 interface ProjectTreeProps {
   categoryPaths: string[];
@@ -200,6 +201,21 @@ export function ProjectTree({ categoryPaths, paths, rootPath, pinnedRoots }: Pro
     if (files.length > 0) void importAudioFiles(files, targetDirectory);
   }
 
+  function handleDragStart(event: DragEvent<HTMLDivElement>) {
+    const row = event.nativeEvent
+      .composedPath()
+      .find(
+        (element): element is HTMLElement =>
+          element instanceof HTMLElement && element.dataset.itemPath !== undefined,
+      );
+    const treePath = row?.dataset.itemPath;
+    if (!treePath || row?.dataset.itemType === "folder") return;
+    const relativePath = workspaceRelativeEntry(treePath, rootPath);
+    if (!relativePath || !isAudioPath(relativePath)) return;
+    event.dataTransfer.setData(audioDragType, relativePath);
+    event.dataTransfer.effectAllowed = "copyMove";
+  }
+
   function createDirectoryFromItem(item: ContextMenuItem) {
     const directoryPath = item.kind === "directory" ? item.path : treeParent(item.path);
     const relativePath = workspaceRelativeDirectory(directoryPath, rootPath);
@@ -252,7 +268,11 @@ export function ProjectTree({ categoryPaths, paths, rootPath, pinnedRoots }: Pro
     <>
       <ContextMenu open={contextMenuOpen} onOpenChange={handleContextMenuOpenChange}>
         <ContextMenuTrigger asChild>
-          <div className="h-full min-h-0" onContextMenuCapture={handleContextMenu}>
+          <div
+            className="h-full min-h-0"
+            onContextMenuCapture={handleContextMenu}
+            onDragStart={handleDragStart}
+          >
             <FileTree
               className="project-tree"
               model={model}
@@ -427,5 +447,10 @@ function hasFiles(event: DragEvent): boolean {
 
 function isAudioFile(file: File): boolean {
   const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension !== undefined && audioExtensions.has(extension);
+}
+
+function isAudioPath(path: string): boolean {
+  const extension = path.split(".").pop()?.toLowerCase();
   return extension !== undefined && audioExtensions.has(extension);
 }

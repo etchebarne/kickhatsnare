@@ -1,12 +1,20 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Network, Rows3 } from "lucide-react";
 
+import { MixGraphEditor } from "@/components/custom/mix-graph";
 import { ProjectSidebar } from "@/components/custom/project-sidebar";
-import { TimelineEditor, TimelineHeaderControls } from "@/components/custom/timeline";
+import {
+  TimelineEditor,
+  TimelineHeaderControls,
+  TimelineTransportControls,
+} from "@/components/custom/timeline";
 import { TitleBar } from "@/components/custom/window-controls";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/stores/app-store";
 
 export function App() {
+  const [view, setView] = useState<"arrangement" | "mix">("arrangement");
   const serverStatus = useAppStore((state) => state.serverStatus);
   const workspace = useAppStore((state) => state.workspace);
   const operationError = useAppStore((state) => state.operationError);
@@ -57,16 +65,37 @@ export function App() {
             <div className="flex size-11 shrink-0 items-center justify-center border-r border-border">
               <SidebarTrigger />
             </div>
+            <TimelineTransportControls />
             <TimelineHeaderControls />
+            <div className="ml-auto flex items-center gap-1 px-2">
+              <Button
+                size="xs"
+                variant={view === "arrangement" ? "secondary" : "ghost"}
+                onClick={() => setView("arrangement")}
+              >
+                <Rows3 /> Arrangement
+              </Button>
+              <Button
+                size="xs"
+                variant={view === "mix" ? "secondary" : "ghost"}
+                onClick={() => setView("mix")}
+              >
+                <Network /> Mix
+              </Button>
+            </div>
             {operationError ? (
-              <p className="ml-auto truncate px-3 text-xs text-destructive" role="alert">
+              <p className="truncate px-3 text-xs text-destructive" role="alert">
                 {operationError}
               </p>
             ) : null}
           </header>
           <main className="min-h-0 flex-1 overflow-hidden">
             {workspace ? (
-              <TimelineEditor />
+              view === "arrangement" ? (
+                <TimelineEditor />
+              ) : (
+                <MixGraphEditor />
+              )
             ) : (
               <div className="grid h-full place-items-center px-6">
                 <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">

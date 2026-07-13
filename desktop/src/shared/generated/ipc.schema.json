@@ -1,5 +1,260 @@
 {
   "methods": {
+    "audio.getTransport": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "GetTransportParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "TransportState": {
+            "enum": [
+              "stopped",
+              "playing",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/TransportState"
+          }
+        },
+        "required": [
+          "state",
+          "positionTick",
+          "durationTicks"
+        ],
+        "title": "TransportSnapshot",
+        "type": "object"
+      }
+    },
+    "audio.pause": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "PauseAudioParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "TransportState": {
+            "enum": [
+              "stopped",
+              "playing",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/TransportState"
+          }
+        },
+        "required": [
+          "state",
+          "positionTick",
+          "durationTicks"
+        ],
+        "title": "TransportSnapshot",
+        "type": "object"
+      }
+    },
+    "audio.play": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "PlayAudioParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "TransportState": {
+            "enum": [
+              "stopped",
+              "playing",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/TransportState"
+          }
+        },
+        "required": [
+          "state",
+          "positionTick",
+          "durationTicks"
+        ],
+        "title": "TransportSnapshot",
+        "type": "object"
+      }
+    },
+    "audio.seek": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "positionTick"
+        ],
+        "title": "SeekAudioParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "TransportState": {
+            "enum": [
+              "stopped",
+              "playing",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/TransportState"
+          }
+        },
+        "required": [
+          "state",
+          "positionTick",
+          "durationTicks"
+        ],
+        "title": "TransportSnapshot",
+        "type": "object"
+      }
+    },
+    "audio.stop": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "StopAudioParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "TransportState": {
+            "enum": [
+              "stopped",
+              "playing",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/TransportState"
+          }
+        },
+        "required": [
+          "state",
+          "positionTick",
+          "durationTicks"
+        ],
+        "title": "TransportSnapshot",
+        "type": "object"
+      }
+    },
     "library.get": {
       "params": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -200,6 +455,273 @@
         "type": "string"
       }
     },
+    "workspace.addAudioClip": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "sourcePath": {
+            "type": "string"
+          },
+          "startTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trackId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trackId",
+          "sourcePath",
+          "startTick"
+        ],
+        "title": "AddAudioClipParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
     "workspace.createDirectory": {
       "params": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -244,7 +766,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -253,6 +796,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -260,7 +810,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -273,8 +827,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -307,6 +876,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -319,8 +892,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -330,6 +910,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -337,6 +929,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -426,7 +1023,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -435,6 +1053,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -442,7 +1067,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -455,8 +1084,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -489,6 +1133,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -501,8 +1149,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -512,6 +1167,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -519,6 +1186,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -608,7 +1280,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -617,6 +1310,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -624,7 +1324,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -637,8 +1341,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -671,6 +1390,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -683,8 +1406,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -694,6 +1424,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -701,6 +1443,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -790,7 +1537,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -799,6 +1567,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -806,7 +1581,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -819,8 +1598,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -853,6 +1647,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -865,8 +1663,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -876,6 +1681,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -883,6 +1700,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -964,7 +1786,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -973,6 +1816,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -980,7 +1830,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -993,8 +1847,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -1027,6 +1896,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -1039,8 +1912,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -1050,6 +1930,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -1057,6 +1949,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -1153,7 +2050,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -1162,6 +2080,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -1169,7 +2094,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -1182,8 +2111,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -1216,6 +2160,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -1228,8 +2176,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -1239,6 +2194,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -1246,6 +2213,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -1339,7 +2311,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -1348,6 +2341,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -1355,7 +2355,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -1368,8 +2372,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -1402,6 +2421,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -1414,8 +2437,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -1425,6 +2455,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -1432,6 +2474,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -1513,7 +2560,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -1522,6 +2590,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -1529,7 +2604,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -1542,8 +2621,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -1576,6 +2670,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -1588,8 +2686,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -1599,6 +2704,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -1606,6 +2723,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -1695,7 +2817,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -1704,6 +2847,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -1711,7 +2861,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -1724,8 +2878,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -1758,6 +2927,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -1770,8 +2943,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -1781,6 +2961,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -1788,6 +2980,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -1869,7 +3066,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -1878,6 +3096,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -1885,7 +3110,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -1898,8 +3127,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -1932,6 +3176,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -1944,8 +3192,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -1955,6 +3210,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -1962,6 +3229,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -2051,7 +3323,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -2060,6 +3353,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -2067,7 +3367,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -2080,8 +3384,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -2114,6 +3433,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -2126,8 +3449,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -2137,6 +3467,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -2144,6 +3486,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -2261,7 +3608,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -2270,6 +3638,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -2277,7 +3652,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -2290,8 +3669,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -2324,6 +3718,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -2336,8 +3734,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -2347,6 +3752,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -2354,6 +3771,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -2404,11 +3826,18 @@
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "additionalProperties": false,
         "properties": {
+          "gainDb": {
+            "format": "double",
+            "type": "number"
+          },
           "id": {
             "type": [
               "string",
               "null"
             ]
+          },
+          "isConnected": {
+            "type": "boolean"
           },
           "isMuted": {
             "type": "boolean"
@@ -2418,12 +3847,19 @@
           },
           "name": {
             "type": "string"
+          },
+          "pan": {
+            "format": "double",
+            "type": "number"
           }
         },
         "required": [
           "name",
           "isMuted",
-          "isSoloed"
+          "isSoloed",
+          "gainDb",
+          "pan",
+          "isConnected"
         ],
         "title": "SaveTimelineTrackParams",
         "type": "object"
@@ -2457,7 +3893,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -2466,6 +3923,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -2473,7 +3937,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -2486,8 +3954,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -2520,6 +4003,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -2532,8 +4019,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -2543,6 +4037,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -2550,6 +4056,540 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.setMasterMix": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "gainDb": {
+            "format": "double",
+            "type": "number"
+          },
+          "isMuted": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "gainDb",
+          "isMuted"
+        ],
+        "title": "SetMasterMixParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.setMixNodePosition": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "nodeId": {
+            "type": "string"
+          },
+          "x": {
+            "format": "double",
+            "type": "number"
+          },
+          "y": {
+            "format": "double",
+            "type": "number"
+          }
+        },
+        "required": [
+          "nodeId",
+          "x",
+          "y"
+        ],
+        "title": "SetMixNodePositionParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -2678,7 +4718,28 @@
               "name": {
                 "type": "string"
               },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
               "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
@@ -2687,6 +4748,13 @@
                 "format": "uint32",
                 "minimum": 0,
                 "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
               }
             },
             "required": [
@@ -2694,7 +4762,11 @@
               "name",
               "startTick",
               "durationTicks",
-              "sourceOffsetTicks"
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
             ],
             "type": "object"
           },
@@ -2707,8 +4779,23 @@
               "gridDivision": {
                 "$ref": "#/$defs/GridDivision"
               },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
               "isSnapEnabled": {
                 "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "masterNodeY": {
+                "format": "double",
+                "type": "number"
               },
               "ticksPerQuarter": {
                 "format": "uint32",
@@ -2741,6 +4828,10 @@
               "timeSignatureDenominator",
               "gridDivision",
               "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "masterNodeX",
+              "masterNodeY",
               "tracks"
             ],
             "type": "object"
@@ -2753,8 +4844,15 @@
                 },
                 "type": "array"
               },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
               "id": {
                 "type": "string"
+              },
+              "isConnected": {
+                "type": "boolean"
               },
               "isMuted": {
                 "type": "boolean"
@@ -2764,6 +4862,18 @@
               },
               "name": {
                 "type": "string"
+              },
+              "nodeX": {
+                "format": "double",
+                "type": "number"
+              },
+              "nodeY": {
+                "format": "double",
+                "type": "number"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
               }
             },
             "required": [
@@ -2771,6 +4881,11 @@
               "name",
               "isMuted",
               "isSoloed",
+              "gainDb",
+              "pan",
+              "isConnected",
+              "nodeX",
+              "nodeY",
               "clips"
             ],
             "type": "object"
@@ -2817,5 +4932,5 @@
       }
     }
   },
-  "protocolVersion": 7
+  "protocolVersion": 8
 }
