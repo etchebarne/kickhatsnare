@@ -1,4 +1,5 @@
 mod audio;
+mod library;
 mod system;
 mod workspace;
 
@@ -16,6 +17,7 @@ pub fn dispatch(method: &str, params: &Value, core: &mut Core) -> Result<Value, 
 
     match domain {
         "audio" => audio::dispatch(method, action, params, core.audio()),
+        "library" => library::dispatch(method, action, params, core.library()),
         "system" => system::dispatch(method, action, params, core.system()),
         "workspace" => workspace::dispatch(method, action, params, core.workspaces()),
         _ => Err(ApiError::new(

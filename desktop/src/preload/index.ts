@@ -4,6 +4,9 @@ import { ipcChannels, type KickHatSnareApi } from "../shared/ipc";
 
 const api: KickHatSnareApi = {
   ping: () => ipcRenderer.invoke(ipcChannels.ping),
+  getLibrary: () => ipcRenderer.invoke(ipcChannels.libraryGet),
+  pinFolder: () => ipcRenderer.invoke(ipcChannels.libraryPinFolder),
+  unpinFolder: (id) => ipcRenderer.invoke(ipcChannels.libraryUnpinFolder, id),
   createWorkspaceDirectory: (path) =>
     ipcRenderer.invoke(ipcChannels.workspaceCreateDirectory, path),
   deleteWorkspaceEntry: (path) => ipcRenderer.invoke(ipcChannels.workspaceDeleteEntry, path),

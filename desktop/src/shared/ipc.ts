@@ -1,8 +1,12 @@
 import type { ResultFor } from "./generated/ipc";
 
+export type LibrarySnapshot = ResultFor<"library.get">;
 export type WorkspaceSnapshot = ResultFor<"workspace.get">;
 
 export const ipcChannels = {
+  libraryGet: "library:get",
+  libraryPinFolder: "library:pin-folder",
+  libraryUnpinFolder: "library:unpin-folder",
   ping: "core:ping",
   workspaceCreateDirectory: "workspace:create-directory",
   workspaceDeleteEntry: "workspace:delete-entry",
@@ -20,6 +24,9 @@ export const ipcChannels = {
 
 export interface KickHatSnareApi {
   ping(): Promise<ResultFor<"system.ping">>;
+  getLibrary(): Promise<LibrarySnapshot>;
+  pinFolder(): Promise<LibrarySnapshot | null>;
+  unpinFolder(id: string): Promise<LibrarySnapshot>;
   createWorkspaceDirectory(path: string): Promise<WorkspaceSnapshot>;
   deleteWorkspaceEntry(path: string): Promise<WorkspaceSnapshot>;
   getWorkspace(): Promise<WorkspaceSnapshot>;

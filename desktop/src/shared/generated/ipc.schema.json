@@ -1,5 +1,189 @@
 {
   "methods": {
+    "library.get": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "GetLibraryParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "PinnedFolder": {
+            "properties": {
+              "files": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isAvailable": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "files",
+              "isAvailable"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "pinnedFolders": {
+            "items": {
+              "$ref": "#/$defs/PinnedFolder"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pinnedFolders"
+        ],
+        "title": "LibrarySnapshot",
+        "type": "object"
+      }
+    },
+    "library.pinFolder": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "path"
+        ],
+        "title": "PinFolderParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "PinnedFolder": {
+            "properties": {
+              "files": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isAvailable": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "files",
+              "isAvailable"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "pinnedFolders": {
+            "items": {
+              "$ref": "#/$defs/PinnedFolder"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pinnedFolders"
+        ],
+        "title": "LibrarySnapshot",
+        "type": "object"
+      }
+    },
+    "library.unpinFolder": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "UnpinFolderParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "PinnedFolder": {
+            "properties": {
+              "files": {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isAvailable": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "path": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "path",
+              "files",
+              "isAvailable"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "pinnedFolders": {
+            "items": {
+              "$ref": "#/$defs/PinnedFolder"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "pinnedFolders"
+        ],
+        "title": "LibrarySnapshot",
+        "type": "object"
+      }
+    },
     "system.ping": {
       "params": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -472,5 +656,5 @@
       }
     }
   },
-  "protocolVersion": 5
+  "protocolVersion": 6
 }

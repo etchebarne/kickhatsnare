@@ -52,55 +52,68 @@ mod tests {
 
     #[test]
     fn handles_a_ping_request() {
-        let input = b"{\"protocolVersion\":5,\"id\":7,\"method\":\"system.ping\",\"params\":{}}\n";
+        let input = b"{\"protocolVersion\":6,\"id\":7,\"method\":\"system.ping\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":5,\"id\":7,\"result\":\"ready\"}\n"
+            "{\"protocolVersion\":6,\"id\":7,\"result\":\"ready\"}\n"
         );
     }
 
     #[test]
     fn returns_the_initial_workspace_snapshot() {
         let input =
-            b"{\"protocolVersion\":5,\"id\":10,\"method\":\"workspace.get\",\"params\":{}}\n";
+            b"{\"protocolVersion\":6,\"id\":10,\"method\":\"workspace.get\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":5,\"id\":10,\"result\":{\"files\":[],\"isDirty\":false,\"name\":\"Untitled\",\"projectFilePath\":null,\"rootPath\":null}}\n"
+            "{\"protocolVersion\":6,\"id\":10,\"result\":{\"files\":[],\"isDirty\":false,\"name\":\"Untitled\",\"projectFilePath\":null,\"rootPath\":null}}\n"
+        );
+    }
+
+    #[test]
+    fn returns_the_initial_library_snapshot() {
+        let input = b"{\"protocolVersion\":6,\"id\":11,\"method\":\"library.get\",\"params\":{}}\n";
+        let mut output = Vec::new();
+
+        serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
+
+        assert_eq!(
+            String::from_utf8(output).expect("response should be UTF-8"),
+            "{\"protocolVersion\":6,\"id\":11,\"result\":{\"pinnedFolders\":[]}}\n"
         );
     }
 
     #[test]
     fn routes_feature_domains_independently() {
         let input =
-            b"{\"protocolVersion\":5,\"id\":8,\"method\":\"audio.unknown\",\"params\":{}}\n";
+            b"{\"protocolVersion\":6,\"id\":8,\"method\":\"audio.unknown\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":5,\"id\":8,\"error\":{\"code\":\"METHOD_NOT_FOUND\",\"message\":\"unknown audio method: unknown\"}}\n"
+            "{\"protocolVersion\":6,\"id\":8,\"error\":{\"code\":\"METHOD_NOT_FOUND\",\"message\":\"unknown audio method: unknown\"}}\n"
         );
     }
 
     #[test]
     fn rejects_a_mismatched_protocol_version() {
-        let input = b"{\"protocolVersion\":6,\"id\":9,\"method\":\"system.ping\",\"params\":{}}\n";
+        let input = b"{\"protocolVersion\":7,\"id\":9,\"method\":\"system.ping\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":5,\"id\":9,\"error\":{\"code\":\"PROTOCOL_VERSION_MISMATCH\",\"message\":\"expected protocol version 5, received 6\"}}\n"
+            "{\"protocolVersion\":6,\"id\":9,\"error\":{\"code\":\"PROTOCOL_VERSION_MISMATCH\",\"message\":\"expected protocol version 6, received 7\"}}\n"
         );
     }
 }

@@ -48,7 +48,14 @@ const treeStyles = `
 const contextMenuFocusSettleMs = 200;
 
 interface ProjectTreeProps {
+  categoryPaths: string[];
   paths: string[];
+  rootPath: string;
+  pinnedRoots: PinnedTreeRoot[];
+}
+
+interface PinnedTreeRoot {
+  id: string;
   rootPath: string;
 }
 
@@ -57,7 +64,7 @@ interface DropTarget {
   path: string;
 }
 
-export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
+export function ProjectTree({ categoryPaths, paths, rootPath, pinnedRoots }: ProjectTreeProps) {
   const dropTarget = useRef<DropTarget | null>(null);
   const pendingDirectories = useRef(new Set<string>());
   const menuActionTimer = useRef<number | null>(null);
@@ -67,6 +74,8 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
   const deleteWorkspaceEntry = useAppStore((state) => state.deleteWorkspaceEntry);
   const importAudioFiles = useAppStore((state) => state.importAudioFiles);
   const moveWorkspaceEntry = useAppStore((state) => state.moveWorkspaceEntry);
+  const pinFolder = useAppStore((state) => state.pinFolder);
+  const unpinFolder = useAppStore((state) => state.unpinFolder);
 
   function resetTree() {
     model.resetPaths(paths);
@@ -153,7 +162,7 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
   function handleDragEnter(event: DragEvent<HTMLElement>) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    const target = findDropTarget(event);
+    const target = findWorkspaceDropTarget(event, rootPath);
     updateDropTarget(dropTarget, target);
     event.dataTransfer.dropEffect = target ? "copy" : "none";
   }
@@ -161,7 +170,7 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
   function handleDragOver(event: DragEvent<HTMLElement>) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    const target = findDropTarget(event);
+    const target = findWorkspaceDropTarget(event, rootPath);
     updateDropTarget(dropTarget, target);
     event.dataTransfer.dropEffect = target ? "copy" : "none";
   }
@@ -182,7 +191,7 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
   function handleDrop(event: DragEvent<HTMLElement>) {
     if (!hasFiles(event)) return;
     event.preventDefault();
-    const target = findDropTarget(event) ?? dropTarget.current;
+    const target = findWorkspaceDropTarget(event, rootPath) ?? dropTarget.current;
     clearDropTarget(dropTarget);
     if (!target) return;
     const targetDirectory = workspaceRelativeDirectory(target.path, rootPath);
@@ -216,12 +225,6 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
 
   function handleContextMenu(event: MouseEvent<HTMLDivElement>) {
     const item = findContextMenuItem(event);
-    if (!item) {
-      event.preventDefault();
-      event.stopPropagation();
-      setContextItem(null);
-      return;
-    }
     setContextItem(item);
   }
 
@@ -239,6 +242,12 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
     }, contextMenuFocusSettleMs);
   }
 
+  const pinnedFolderId = contextItem
+    ? (pinnedFolderForPath(contextItem.path, pinnedRoots)?.id ?? null)
+    : null;
+  const isCategory =
+    contextItem !== null && categoryPaths.includes(trimDirectorySlash(contextItem.path));
+
   return (
     <>
       <ContextMenu open={contextMenuOpen} onOpenChange={handleContextMenuOpenChange}>
@@ -247,7 +256,7 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
             <FileTree
               className="project-tree"
               model={model}
-              aria-label="Project files"
+              aria-label="Project and pinned files"
               onDragEnter={handleDragEnter}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
@@ -255,19 +264,39 @@ export function ProjectTree({ paths, rootPath }: ProjectTreeProps) {
             />
           </div>
         </ContextMenuTrigger>
-        {contextItem ? (
-          <ProjectTreeMenu
-            item={contextItem}
-            isRoot={workspaceRelativeEntry(contextItem.path, rootPath) === null}
-            onCreateDirectory={() =>
-              runAfterContextMenuCloses(() => createDirectoryFromItem(contextItem))
-            }
-            onDelete={() => deleteItem(contextItem)}
-            onRename={() => runAfterContextMenuCloses(() => model.startRenaming(contextItem.path))}
-          />
-        ) : null}
+        <ProjectTreeMenu
+          item={contextItem}
+          isCategory={isCategory}
+          isPinned={pinnedFolderId !== null}
+          isRoot={
+            contextItem !== null && workspaceRelativeEntry(contextItem.path, rootPath) === null
+          }
+          onCreateDirectory={() => {
+            if (contextItem) runAfterContextMenuCloses(() => createDirectoryFromItem(contextItem));
+          }}
+          onDelete={() => {
+            if (contextItem) deleteItem(contextItem);
+          }}
+          onPinFolder={() => void pinFolder()}
+          onRename={() => {
+            if (contextItem) runAfterContextMenuCloses(() => model.startRenaming(contextItem.path));
+          }}
+          onUnpin={() => {
+            if (pinnedFolderId !== null) void unpinFolder(pinnedFolderId);
+          }}
+        />
       </ContextMenu>
     </>
+  );
+}
+
+function pinnedFolderForPath(path: string, pinnedRoots: PinnedTreeRoot[]): PinnedTreeRoot | null {
+  const normalizedPath = trimDirectorySlash(path);
+  return (
+    pinnedRoots.find(
+      (folder) =>
+        normalizedPath === folder.rootPath || normalizedPath.startsWith(`${folder.rootPath}/`),
+    ) ?? null
   );
 }
 
@@ -306,6 +335,14 @@ function findDropTarget(event: DragEvent<HTMLElement>): DropTarget | null {
     shadowRoot.querySelectorAll<HTMLElement>("[data-item-path][data-item-type='folder']"),
   ).find((element) => element.dataset.itemPath === parentPath && element.role === "treeitem");
   return parentRow ? { element: parentRow, path: parentPath } : null;
+}
+
+function findWorkspaceDropTarget(
+  event: DragEvent<HTMLElement>,
+  rootPath: string,
+): DropTarget | null {
+  const target = findDropTarget(event);
+  return target && workspaceRelativeDirectory(target.path, rootPath) !== null ? target : null;
 }
 
 function updateDropTarget(targetRef: { current: DropTarget | null }, target: DropTarget | null) {

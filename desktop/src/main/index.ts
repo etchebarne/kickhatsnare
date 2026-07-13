@@ -8,6 +8,8 @@ import { CoreServer } from "./server-process";
 let mainWindow: BrowserWindow | null = null;
 let coreServer: CoreServer | null = null;
 
+app.setPath("userData", path.join(app.getPath("appData"), "kickhatsnare"));
+
 function createWindow(): void {
   mainWindow = new BrowserWindow({
     width: 1440,
@@ -81,6 +83,21 @@ async function openProject(event: IpcMainInvokeEvent) {
   return getCoreServer().openWorkspace(projectFilePath);
 }
 
+async function pinFolder(event: IpcMainInvokeEvent) {
+  const window = windowForEvent(event);
+  if (!window) throw new Error("Folder picker requires an application window");
+
+  const selection = await dialog.showOpenDialog(window, {
+    title: "Pin Sample Folder",
+    buttonLabel: "Pin Folder",
+    properties: ["openDirectory"],
+  });
+  const directoryPath = selection.filePaths[0];
+  if (selection.canceled || !directoryPath) return null;
+
+  return getCoreServer().pinFolder(directoryPath);
+}
+
 async function saveProjectAs(event: IpcMainInvokeEvent) {
   const window = windowForEvent(event);
   if (!window) throw new Error("Project dialog requires an application window");
@@ -106,9 +123,14 @@ async function saveProject(event: IpcMainInvokeEvent) {
 app.whenReady().then(async () => {
   app.setAppUserModelId("com.kickhatsnare.desktop");
 
-  coreServer = new CoreServer();
+  coreServer = new CoreServer(app.getPath("userData"));
   await coreServer.start();
   ipcMain.handle(ipcChannels.ping, () => getCoreServer().ping());
+  ipcMain.handle(ipcChannels.libraryGet, () => getCoreServer().getLibrary());
+  ipcMain.handle(ipcChannels.libraryPinFolder, pinFolder);
+  ipcMain.handle(ipcChannels.libraryUnpinFolder, (_event, id: string) =>
+    getCoreServer().unpinFolder(id),
+  );
   ipcMain.handle(ipcChannels.workspaceCreateDirectory, (_event, path: string) =>
     getCoreServer().createWorkspaceDirectory(path),
   );
@@ -146,6 +168,9 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.ping);
+  ipcMain.removeHandler(ipcChannels.libraryGet);
+  ipcMain.removeHandler(ipcChannels.libraryPinFolder);
+  ipcMain.removeHandler(ipcChannels.libraryUnpinFolder);
   ipcMain.removeHandler(ipcChannels.workspaceCreateDirectory);
   ipcMain.removeHandler(ipcChannels.workspaceDeleteEntry);
   ipcMain.removeHandler(ipcChannels.workspaceGet);

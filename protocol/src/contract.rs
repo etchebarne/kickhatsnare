@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde_json::Value;
 use ts_rs::{Config, TS};
 
-use crate::{PROTOCOL_VERSION, audio, system, workspace};
+use crate::{PROTOCOL_VERSION, audio, library, system, workspace};
 
 pub trait IpcMethod {
     const NAME: &'static str;
@@ -28,6 +28,7 @@ pub fn contract() -> Contract {
     let mut methods = Vec::new();
     methods.extend(system::methods());
     methods.extend(audio::methods());
+    methods.extend(library::methods());
     methods.extend(workspace::methods());
 
     Contract {

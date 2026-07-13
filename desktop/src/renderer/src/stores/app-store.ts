@@ -1,11 +1,12 @@
 import { create } from "zustand";
 
-import type { WorkspaceSnapshot } from "@shared/ipc";
+import type { LibrarySnapshot, WorkspaceSnapshot } from "@shared/ipc";
 
 type ServerStatus = "connecting" | "ready" | "unavailable";
 
 interface AppState {
   serverStatus: ServerStatus;
+  library: LibrarySnapshot | null;
   workspace: WorkspaceSnapshot | null;
   operationError: string | null;
   connect(): Promise<void>;
@@ -13,6 +14,8 @@ interface AppState {
   deleteWorkspaceEntry(path: string): Promise<boolean>;
   importAudioFiles(files: File[], targetDirectory: string): Promise<void>;
   moveWorkspaceEntry(sourcePath: string, destinationPath: string): Promise<boolean>;
+  pinFolder(): Promise<boolean>;
+  unpinFolder(id: string): Promise<boolean>;
   newProject(): Promise<void>;
   openProject(): Promise<void>;
   saveProject(): Promise<void>;
@@ -21,6 +24,7 @@ interface AppState {
 
 export const useAppStore = create<AppState>((set) => ({
   serverStatus: "connecting",
+  library: null,
   workspace: null,
   operationError: null,
   async connect() {
@@ -29,8 +33,11 @@ export const useAppStore = create<AppState>((set) => ({
       const response = await window.kickHatSnare.ping();
       if (response !== "ready") throw new Error("Core server did not become ready");
 
-      const workspace = await window.kickHatSnare.getWorkspace();
-      set({ serverStatus: "ready", workspace });
+      const [library, workspace] = await Promise.all([
+        window.kickHatSnare.getLibrary(),
+        window.kickHatSnare.getWorkspace(),
+      ]);
+      set({ serverStatus: "ready", library, workspace });
     } catch (error) {
       set({ serverStatus: "unavailable", operationError: errorMessage(error) });
     }
@@ -49,6 +56,12 @@ export const useAppStore = create<AppState>((set) => ({
       window.kickHatSnare.moveWorkspaceEntry(sourcePath, destinationPath),
     );
   },
+  async pinFolder() {
+    return updateLibrary(set, () => window.kickHatSnare.pinFolder());
+  },
+  async unpinFolder(id) {
+    return updateLibrary(set, () => window.kickHatSnare.unpinFolder(id));
+  },
   async newProject() {
     await updateWorkspace(set, () => window.kickHatSnare.newProject());
   },
@@ -62,6 +75,21 @@ export const useAppStore = create<AppState>((set) => ({
     await updateWorkspace(set, () => window.kickHatSnare.saveProjectAs());
   },
 }));
+
+async function updateLibrary(
+  set: (state: Partial<AppState>) => void,
+  operation: () => Promise<LibrarySnapshot | null>,
+): Promise<boolean> {
+  set({ operationError: null });
+  try {
+    const library = await operation();
+    if (library) set({ library });
+    return library !== null;
+  } catch (error) {
+    set({ operationError: errorMessage(error) });
+    return false;
+  }
+}
 
 async function updateWorkspace(
   set: (state: Partial<AppState>) => void,

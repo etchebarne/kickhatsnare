@@ -39,9 +39,14 @@ const ajv = new Ajv2020({ allErrors: true, strict: true });
 const validatorCache = new Map<string, ValidateFunction>();
 
 export class CoreServer {
+  readonly #dataDirectory: string;
   readonly #pending = new Map<number, PendingRequest>();
   #process: ChildProcessWithoutNullStreams | null = null;
   #nextRequestId = 1;
+
+  constructor(dataDirectory: string) {
+    this.#dataDirectory = dataDirectory;
+  }
 
   start(): Promise<void> {
     if (this.#process) return Promise.resolve();
@@ -50,7 +55,7 @@ export class CoreServer {
       return Promise.reject(new Error("Generated IPC types and schemas have different versions"));
     }
 
-    const server = spawn(resolveServerPath(), [], {
+    const server = spawn(resolveServerPath(), ["--data-dir", this.#dataDirectory], {
       stdio: ["pipe", "pipe", "pipe"],
     });
     this.#process = server;
@@ -74,6 +79,18 @@ export class CoreServer {
 
   ping(): Promise<ResultFor<"system.ping">> {
     return this.#request("system.ping", {});
+  }
+
+  getLibrary(): Promise<ResultFor<"library.get">> {
+    return this.#request("library.get", {});
+  }
+
+  pinFolder(path: string): Promise<ResultFor<"library.pinFolder">> {
+    return this.#request("library.pinFolder", { path });
+  }
+
+  unpinFolder(id: string): Promise<ResultFor<"library.unpinFolder">> {
+    return this.#request("library.unpinFolder", { id });
   }
 
   createWorkspaceDirectory(path: string): Promise<ResultFor<"workspace.createDirectory">> {
