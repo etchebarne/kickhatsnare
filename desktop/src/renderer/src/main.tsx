@@ -1,6 +1,8 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 
+import "overlayscrollbars/styles/overlayscrollbars.css";
+
 import { App } from "./app";
 import "./styles/globals.css";
 

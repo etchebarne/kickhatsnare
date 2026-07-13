@@ -12,6 +12,7 @@ import { TimelineClip } from "./timeline-clip";
 import { TimelinePlayhead } from "./timeline-playhead";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { OverlayScrollArea } from "@/components/ui/overlay-scroll-area";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { useTransportStore } from "@/stores/transport-store";
@@ -325,9 +326,9 @@ export function TimelineEditor() {
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col bg-background">
-      <div
-        ref={scrollContainer}
-        className="min-h-0 flex-1 overflow-auto"
+      <OverlayScrollArea
+        viewportRef={scrollContainer}
+        className="flex-1"
         style={{ "--timeline-track-height": "80px" } as CSSProperties}
       >
         <div className="relative min-h-full" style={{ width: TRACK_HEADER_WIDTH + timelineWidth }}>
@@ -471,7 +472,7 @@ export function TimelineEditor() {
             </div>
           ))}
         </div>
-      </div>
+      </OverlayScrollArea>
     </section>
   );
 }

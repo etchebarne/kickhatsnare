@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { OverlayScrollArea } from "@/components/ui/overlay-scroll-area";
 import {
   Select,
   SelectContent,
@@ -65,45 +66,57 @@ export function SettingsDialog() {
           <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)] sm:grid-cols-[12rem_minmax(0,1fr)] sm:grid-rows-1">
             <nav
               aria-label="Settings categories"
-              className="flex gap-1 overflow-x-auto border-b bg-muted/20 p-2 sm:block sm:border-r sm:border-b-0 sm:p-3"
+              className="min-w-0 border-b bg-muted/20 sm:border-r sm:border-b-0"
             >
-              {categories.map((category) => (
-                <Button
-                  key={category.id}
-                  type="button"
-                  variant={selectedCategory?.id === category.id ? "secondary" : "ghost"}
-                  className="h-9 justify-start px-3 text-xs sm:mb-1 sm:w-full"
-                  onClick={() => setSelectedCategoryId(category.id)}
-                >
-                  {category.label}
-                </Button>
-              ))}
+              <OverlayScrollArea
+                className="sm:h-full"
+                overflowY="hidden"
+                viewportClassName="flex gap-1 p-2 sm:block sm:p-3"
+              >
+                {categories.map((category) => (
+                  <Button
+                    key={category.id}
+                    type="button"
+                    variant={selectedCategory?.id === category.id ? "secondary" : "ghost"}
+                    className="h-9 justify-start px-3 text-xs sm:mb-1 sm:w-full"
+                    onClick={() => setSelectedCategoryId(category.id)}
+                  >
+                    {category.label}
+                  </Button>
+                ))}
+              </OverlayScrollArea>
             </nav>
 
             {selectedCategory ? (
-              <section className="min-h-0 overflow-y-auto px-5 py-5 sm:px-7 sm:py-6">
-                <div className="mb-6">
-                  <h2 className="mb-1 text-base font-semibold">{selectedCategory.label}</h2>
-                  <p className="text-xs leading-relaxed text-muted-foreground">
-                    {selectedCategory.description}
-                  </p>
-                </div>
+              <section className="min-h-0">
+                <OverlayScrollArea
+                  className="h-full"
+                  overflowX="hidden"
+                  viewportClassName="px-5 py-5 sm:px-7 sm:py-6"
+                >
+                  <div className="mb-6">
+                    <h2 className="mb-1 text-base font-semibold">{selectedCategory.label}</h2>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      {selectedCategory.description}
+                    </p>
+                  </div>
 
-                <div className="divide-y rounded-lg border bg-card">
-                  {selectedCategory.settings.map((setting) => (
-                    <SettingField
-                      key={setting.id}
-                      setting={setting}
-                      disabled={pendingSettingId === setting.id}
-                      onChange={(value) => void update({ id: setting.id, value })}
-                    />
-                  ))}
-                </div>
-                {error ? (
-                  <p className="mt-3 text-xs text-destructive" role="alert">
-                    {error}
-                  </p>
-                ) : null}
+                  <div className="divide-y rounded-lg border bg-card">
+                    {selectedCategory.settings.map((setting) => (
+                      <SettingField
+                        key={setting.id}
+                        setting={setting}
+                        disabled={pendingSettingId === setting.id}
+                        onChange={(value) => void update({ id: setting.id, value })}
+                      />
+                    ))}
+                  </div>
+                  {error ? (
+                    <p className="mt-3 text-xs text-destructive" role="alert">
+                      {error}
+                    </p>
+                  ) : null}
+                </OverlayScrollArea>
               </section>
             ) : null}
           </div>
