@@ -1,6 +1,12 @@
 import { create } from "zustand";
 
-import type { LibrarySnapshot, WorkspaceSnapshot } from "@shared/ipc";
+import type {
+  LibrarySnapshot,
+  SaveTimelineClipParams,
+  SaveTimelineTrackParams,
+  SetTimelineSettingsParams,
+  WorkspaceSnapshot,
+} from "@shared/ipc";
 
 type ServerStatus = "connecting" | "ready" | "unavailable";
 
@@ -12,6 +18,8 @@ interface AppState {
   connect(): Promise<void>;
   createWorkspaceDirectory(path: string): Promise<boolean>;
   deleteWorkspaceEntry(path: string): Promise<boolean>;
+  deleteTimelineClip(id: string): Promise<boolean>;
+  deleteTimelineTrack(id: string): Promise<boolean>;
   importAudioFiles(files: File[], targetDirectory: string): Promise<void>;
   moveWorkspaceEntry(sourcePath: string, destinationPath: string): Promise<boolean>;
   pinFolder(): Promise<boolean>;
@@ -20,6 +28,9 @@ interface AppState {
   openProject(): Promise<void>;
   saveProject(): Promise<void>;
   saveProjectAs(): Promise<void>;
+  saveTimelineClip(params: SaveTimelineClipParams): Promise<boolean>;
+  saveTimelineTrack(params: SaveTimelineTrackParams): Promise<boolean>;
+  setTimelineSettings(params: SetTimelineSettingsParams): Promise<boolean>;
 }
 
 export const useAppStore = create<AppState>((set) => ({
@@ -48,6 +59,12 @@ export const useAppStore = create<AppState>((set) => ({
   async deleteWorkspaceEntry(path) {
     return updateWorkspace(set, () => window.kickHatSnare.deleteWorkspaceEntry(path));
   },
+  async deleteTimelineClip(id) {
+    return updateWorkspace(set, () => window.kickHatSnare.deleteTimelineClip({ id }));
+  },
+  async deleteTimelineTrack(id) {
+    return updateWorkspace(set, () => window.kickHatSnare.deleteTimelineTrack({ id }));
+  },
   async importAudioFiles(files, targetDirectory) {
     await updateWorkspace(set, () => window.kickHatSnare.importAudioFiles(files, targetDirectory));
   },
@@ -73,6 +90,15 @@ export const useAppStore = create<AppState>((set) => ({
   },
   async saveProjectAs() {
     await updateWorkspace(set, () => window.kickHatSnare.saveProjectAs());
+  },
+  async saveTimelineClip(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.saveTimelineClip(params));
+  },
+  async saveTimelineTrack(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.saveTimelineTrack(params));
+  },
+  async setTimelineSettings(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.setTimelineSettings(params));
   },
 }));
 

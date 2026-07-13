@@ -137,6 +137,12 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.workspaceDeleteEntry, (_event, path: string) =>
     getCoreServer().deleteWorkspaceEntry(path),
   );
+  ipcMain.handle(ipcChannels.workspaceDeleteTimelineClip, (_event, params) =>
+    getCoreServer().deleteTimelineClip(params),
+  );
+  ipcMain.handle(ipcChannels.workspaceDeleteTimelineTrack, (_event, params) =>
+    getCoreServer().deleteTimelineTrack(params),
+  );
   ipcMain.handle(ipcChannels.workspaceGet, () => getCoreServer().getWorkspace());
   ipcMain.handle(ipcChannels.workspaceImportAudio, (_event, payload: unknown) =>
     importWorkspaceAudio(payload),
@@ -150,6 +156,15 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.workspaceOpen, openProject);
   ipcMain.handle(ipcChannels.workspaceSave, saveProject);
   ipcMain.handle(ipcChannels.workspaceSaveAs, saveProjectAs);
+  ipcMain.handle(ipcChannels.workspaceSaveTimelineClip, (_event, params) =>
+    getCoreServer().saveTimelineClip(params),
+  );
+  ipcMain.handle(ipcChannels.workspaceSaveTimelineTrack, (_event, params) =>
+    getCoreServer().saveTimelineTrack(params),
+  );
+  ipcMain.handle(ipcChannels.workspaceSetTimelineSettings, (_event, params) =>
+    getCoreServer().setTimelineSettings(params),
+  );
   ipcMain.handle(ipcChannels.windowMinimize, (event) => windowForEvent(event)?.minimize());
   ipcMain.handle(ipcChannels.windowToggleMaximize, (event) => {
     const window = windowForEvent(event);
@@ -173,6 +188,8 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.libraryUnpinFolder);
   ipcMain.removeHandler(ipcChannels.workspaceCreateDirectory);
   ipcMain.removeHandler(ipcChannels.workspaceDeleteEntry);
+  ipcMain.removeHandler(ipcChannels.workspaceDeleteTimelineClip);
+  ipcMain.removeHandler(ipcChannels.workspaceDeleteTimelineTrack);
   ipcMain.removeHandler(ipcChannels.workspaceGet);
   ipcMain.removeHandler(ipcChannels.workspaceImportAudio);
   ipcMain.removeHandler(ipcChannels.workspaceMoveEntry);
@@ -180,6 +197,9 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.workspaceOpen);
   ipcMain.removeHandler(ipcChannels.workspaceSave);
   ipcMain.removeHandler(ipcChannels.workspaceSaveAs);
+  ipcMain.removeHandler(ipcChannels.workspaceSaveTimelineClip);
+  ipcMain.removeHandler(ipcChannels.workspaceSaveTimelineTrack);
+  ipcMain.removeHandler(ipcChannels.workspaceSetTimelineSettings);
   ipcMain.removeHandler(ipcChannels.windowMinimize);
   ipcMain.removeHandler(ipcChannels.windowToggleMaximize);
   ipcMain.removeHandler(ipcChannels.windowClose);

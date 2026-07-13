@@ -10,6 +10,10 @@ const api: KickHatSnareApi = {
   createWorkspaceDirectory: (path) =>
     ipcRenderer.invoke(ipcChannels.workspaceCreateDirectory, path),
   deleteWorkspaceEntry: (path) => ipcRenderer.invoke(ipcChannels.workspaceDeleteEntry, path),
+  deleteTimelineClip: (params) =>
+    ipcRenderer.invoke(ipcChannels.workspaceDeleteTimelineClip, params),
+  deleteTimelineTrack: (params) =>
+    ipcRenderer.invoke(ipcChannels.workspaceDeleteTimelineTrack, params),
   getWorkspace: () => ipcRenderer.invoke(ipcChannels.workspaceGet),
   importAudioFiles: (files, targetDirectory) =>
     ipcRenderer.invoke(ipcChannels.workspaceImportAudio, {
@@ -22,6 +26,10 @@ const api: KickHatSnareApi = {
   openProject: () => ipcRenderer.invoke(ipcChannels.workspaceOpen),
   saveProject: () => ipcRenderer.invoke(ipcChannels.workspaceSave),
   saveProjectAs: () => ipcRenderer.invoke(ipcChannels.workspaceSaveAs),
+  saveTimelineClip: (params) => ipcRenderer.invoke(ipcChannels.workspaceSaveTimelineClip, params),
+  saveTimelineTrack: (params) => ipcRenderer.invoke(ipcChannels.workspaceSaveTimelineTrack, params),
+  setTimelineSettings: (params) =>
+    ipcRenderer.invoke(ipcChannels.workspaceSetTimelineSettings, params),
   minimizeWindow: () => ipcRenderer.invoke(ipcChannels.windowMinimize),
   toggleMaximizeWindow: () => ipcRenderer.invoke(ipcChannels.windowToggleMaximize),
   closeWindow: () => ipcRenderer.invoke(ipcChannels.windowClose),

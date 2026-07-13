@@ -10,8 +10,14 @@ use tempfile::NamedTempFile;
 
 use crate::CoreError;
 
+mod timeline;
+
+use timeline::Timeline;
+pub use timeline::{GridDivision, TimelineClipSnapshot, TimelineSnapshot, TimelineTrackSnapshot};
+
 const PROJECT_FILE_NAME: &str = "project.khs";
-const PROJECT_FORMAT_VERSION: u32 = 1;
+const PROJECT_FORMAT_VERSION: u32 = 2;
+const OLDEST_SUPPORTED_PROJECT_FORMAT_VERSION: u32 = 1;
 
 /// Owns the active project session and its persistence operations.
 #[derive(Debug)]
@@ -26,6 +32,7 @@ struct Workspace {
     project_file_path: Option<PathBuf>,
     pending_imports: Vec<PendingImport>,
     virtual_directories: HashSet<PathBuf>,
+    timeline: Timeline,
     is_dirty: bool,
 }
 
@@ -35,12 +42,13 @@ struct PendingImport {
     target_path: PathBuf,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct WorkspaceSnapshot {
     pub name: String,
     pub root_path: Option<PathBuf>,
     pub project_file_path: Option<PathBuf>,
     pub files: Vec<String>,
+    pub timeline: TimelineSnapshot,
     pub is_dirty: bool,
 }
 
@@ -49,6 +57,8 @@ pub struct WorkspaceSnapshot {
 struct ProjectDocument {
     format_version: u32,
     name: String,
+    #[serde(default)]
+    timeline: Timeline,
 }
 
 impl Default for Workspaces {
@@ -67,6 +77,7 @@ impl Workspace {
             project_file_path: None,
             pending_imports: Vec::new(),
             virtual_directories: HashSet::new(),
+            timeline: Timeline::default(),
             is_dirty: false,
         }
     }
@@ -118,6 +129,7 @@ impl Workspaces {
             root_path: self.active.root_path.clone(),
             project_file_path: self.active.project_file_path.clone(),
             files,
+            timeline: self.active.timeline.snapshot(),
             is_dirty: self.active.is_dirty,
         })
     }
@@ -151,7 +163,7 @@ impl Workspaces {
         for pending in &self.active.pending_imports {
             copy_audio_file(&pending.source_path, &root_path.join(&pending.target_path))?;
         }
-        write_project(&project_file_path, &name)?;
+        write_project(&project_file_path, &name, &self.active.timeline)?;
 
         self.active = Workspace {
             name,
@@ -159,6 +171,7 @@ impl Workspaces {
             project_file_path: Some(project_file_path),
             pending_imports: Vec::new(),
             virtual_directories: HashSet::new(),
+            timeline: self.active.timeline.clone(),
             is_dirty: false,
         };
         self.snapshot()
@@ -176,7 +189,7 @@ impl Workspaces {
             .as_ref()
             .ok_or_else(|| CoreError::new("project has not been saved yet"))?;
 
-        write_project(project_file_path, &self.active.name)?;
+        write_project(project_file_path, &self.active.name, &self.active.timeline)?;
         self.active.is_dirty = false;
         self.snapshot()
     }
@@ -197,19 +210,23 @@ impl Workspaces {
                 project_file_path.display()
             ))
         })?;
-        let document: ProjectDocument = serde_json::from_slice(&contents).map_err(|error| {
+        let mut document: ProjectDocument = serde_json::from_slice(&contents).map_err(|error| {
             CoreError::new(format!(
                 "failed to parse project file {}: {error}",
                 project_file_path.display()
             ))
         })?;
 
-        if document.format_version != PROJECT_FORMAT_VERSION {
+        if !(OLDEST_SUPPORTED_PROJECT_FORMAT_VERSION..=PROJECT_FORMAT_VERSION)
+            .contains(&document.format_version)
+        {
             return Err(CoreError::new(format!(
-                "unsupported project format version {}; expected {PROJECT_FORMAT_VERSION}",
+                "unsupported project format version {}; expected {OLDEST_SUPPORTED_PROJECT_FORMAT_VERSION} through {PROJECT_FORMAT_VERSION}",
                 document.format_version
             )));
         }
+        document.timeline.ensure_minimum_track()?;
+        document.timeline.validate()?;
 
         let root_path = project_file_path
             .parent()
@@ -220,6 +237,7 @@ impl Workspaces {
             project_file_path: Some(project_file_path.to_owned()),
             pending_imports: Vec::new(),
             virtual_directories: HashSet::new(),
+            timeline: document.timeline,
             is_dirty: false,
         };
         self.snapshot()
@@ -461,6 +479,98 @@ impl Workspaces {
             self.active.is_dirty = true;
         }
 
+        self.snapshot()
+    }
+
+    /// Updates the active project's musical timing and grid settings.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the tempo or time signature is outside supported bounds.
+    pub fn set_timeline_settings(
+        &mut self,
+        bpm: f64,
+        time_signature_numerator: u8,
+        time_signature_denominator: u8,
+        grid_division: GridDivision,
+        is_snap_enabled: bool,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.timeline.set_settings(
+            bpm,
+            time_signature_numerator,
+            time_signature_denominator,
+            grid_division,
+            is_snap_enabled,
+        )?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Creates a timeline track or updates an existing one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the track does not exist or its name is invalid.
+    pub fn save_timeline_track(
+        &mut self,
+        id: Option<&str>,
+        name: &str,
+        is_muted: bool,
+        is_soloed: bool,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active
+            .timeline
+            .save_track(id, name, is_muted, is_soloed)?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Deletes a timeline track and its clips.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the track does not exist.
+    pub fn delete_timeline_track(&mut self, id: &str) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.timeline.delete_track(id)?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Creates a timeline clip or updates and moves an existing one.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the track or clip is missing or the clip range is invalid.
+    #[allow(clippy::too_many_arguments)]
+    pub fn save_timeline_clip(
+        &mut self,
+        id: Option<&str>,
+        track_id: &str,
+        name: &str,
+        start_tick: u32,
+        duration_ticks: u32,
+        source_offset_ticks: u32,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.timeline.save_clip(
+            id,
+            track_id,
+            name,
+            start_tick,
+            duration_ticks,
+            source_offset_ticks,
+        )?;
+        self.active.is_dirty = true;
+        self.snapshot()
+    }
+
+    /// Deletes a timeline clip.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the clip does not exist.
+    pub fn delete_timeline_clip(&mut self, id: &str) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.timeline.delete_clip(id)?;
+        self.active.is_dirty = true;
         self.snapshot()
     }
 }
@@ -730,10 +840,15 @@ fn project_name_from_path(root_path: &Path) -> Result<String, CoreError> {
         .ok_or_else(|| CoreError::new("project directory must have a valid UTF-8 name"))
 }
 
-fn write_project(project_file_path: &Path, name: &str) -> Result<(), CoreError> {
+fn write_project(
+    project_file_path: &Path,
+    name: &str,
+    timeline: &Timeline,
+) -> Result<(), CoreError> {
     let document = ProjectDocument {
         format_version: PROJECT_FORMAT_VERSION,
         name: name.to_owned(),
+        timeline: timeline.clone(),
     };
     let contents = serde_json::to_vec_pretty(&document)
         .map_err(|error| CoreError::new(format!("failed to serialize project: {error}")))?;
@@ -832,9 +947,10 @@ fn collect_files(
 mod tests {
     use std::fs;
 
+    use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::{PROJECT_FILE_NAME, Workspaces};
+    use super::{GridDivision, PROJECT_FILE_NAME, Workspaces};
 
     #[test]
     fn starts_with_an_empty_unsaved_project_tree() {
@@ -846,6 +962,8 @@ mod tests {
         assert_eq!(snapshot.root_path, None);
         assert_eq!(snapshot.project_file_path, None);
         assert!(snapshot.files.is_empty());
+        assert!((snapshot.timeline.bpm - 120.0).abs() < f64::EPSILON);
+        assert_eq!(snapshot.timeline.tracks.len(), 30);
         assert!(!snapshot.is_dirty);
     }
 
@@ -865,10 +983,13 @@ mod tests {
             Some(project_file.as_path())
         );
         assert!(snapshot.files.is_empty());
-        assert_eq!(
-            fs::read_to_string(project_file).expect("project file should be readable"),
-            "{\n  \"formatVersion\": 1,\n  \"name\": \"First Beat\"\n}\n"
-        );
+        let project: Value = serde_json::from_str(
+            &fs::read_to_string(project_file).expect("project file should be readable"),
+        )
+        .expect("project should contain JSON");
+        assert_eq!(project["formatVersion"], 2);
+        assert_eq!(project["name"], "First Beat");
+        assert_eq!(project["timeline"]["bpm"], 120.0);
     }
 
     #[test]
@@ -893,7 +1014,7 @@ mod tests {
     fn rejects_an_unsupported_project_version_without_replacing_the_session() {
         let parent = tempdir().expect("temporary directory should be created");
         let project_file = parent.path().join(PROJECT_FILE_NAME);
-        fs::write(&project_file, r#"{"formatVersion":2,"name":"Future"}"#)
+        fs::write(&project_file, r#"{"formatVersion":3,"name":"Future"}"#)
             .expect("project should be created");
         let mut workspaces = Workspaces::new();
 
@@ -903,12 +1024,92 @@ mod tests {
 
         assert_eq!(
             error.to_string(),
-            "unsupported project format version 2; expected 1"
+            "unsupported project format version 3; expected 1 through 2"
         );
         assert_eq!(
             workspaces.snapshot().expect("snapshot should succeed").name,
             "Untitled"
         );
+    }
+
+    #[test]
+    fn opens_version_one_projects_with_an_empty_default_timeline() {
+        let parent = tempdir().expect("temporary directory should be created");
+        let project_file = parent.path().join(PROJECT_FILE_NAME);
+        fs::write(&project_file, r#"{"formatVersion":1,"name":"Legacy"}"#)
+            .expect("project should be created");
+        let mut workspaces = Workspaces::new();
+
+        let snapshot = workspaces
+            .open(project_file)
+            .expect("version one project should migrate");
+
+        assert_eq!(snapshot.name, "Legacy");
+        assert!((snapshot.timeline.bpm - 120.0).abs() < f64::EPSILON);
+        assert_eq!(snapshot.timeline.tracks.len(), 30);
+    }
+
+    #[test]
+    fn restores_the_minimum_track_when_opening_an_empty_timeline() {
+        let parent = tempdir().expect("temporary directory should be created");
+        let project_file = parent.path().join(PROJECT_FILE_NAME);
+        fs::write(
+            &project_file,
+            r#"{
+                "formatVersion": 2,
+                "name": "Empty",
+                "timeline": {
+                    "bpm": 120.0,
+                    "timeSignatureNumerator": 4,
+                    "timeSignatureDenominator": 4,
+                    "gridDivision": "quarter",
+                    "isSnapEnabled": true,
+                    "tracks": [],
+                    "nextTrackId": 1,
+                    "nextClipId": 1
+                }
+            }"#,
+        )
+        .expect("project should be created");
+        let mut workspaces = Workspaces::new();
+
+        let snapshot = workspaces
+            .open(project_file)
+            .expect("empty timeline should be normalized");
+
+        assert_eq!(snapshot.timeline.tracks.len(), 1);
+        assert_eq!(snapshot.timeline.tracks[0].id, "track-1");
+        assert_eq!(snapshot.timeline.tracks[0].name, "Track 1");
+    }
+
+    #[test]
+    fn saves_and_reopens_timeline_edits() {
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("Arrangement");
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .set_timeline_settings(128.0, 3, 4, GridDivision::Eighth, true)
+            .expect("settings should update");
+        workspaces
+            .save_timeline_track(None, "Drums", false, false)
+            .expect("track should save");
+        workspaces
+            .save_timeline_clip(None, "track-31", "Pattern", 960, 1_920, 0)
+            .expect("clip should save");
+        let saved = workspaces.save_as(&root).expect("project should save");
+
+        let mut reopened = Workspaces::new();
+        let snapshot = reopened
+            .open(saved.project_file_path.expect("project should have a path"))
+            .expect("project should reopen");
+
+        assert!((snapshot.timeline.bpm - 128.0).abs() < f64::EPSILON);
+        assert_eq!(snapshot.timeline.time_signature_numerator, 3);
+        assert_eq!(snapshot.timeline.grid_division, GridDivision::Eighth);
+        assert_eq!(snapshot.timeline.tracks[30].name, "Drums");
+        assert_eq!(snapshot.timeline.tracks[30].clips[0].start_tick, 960);
+        assert_eq!(snapshot.timeline.tracks[30].clips[0].duration_ticks, 1_920);
+        assert!(!snapshot.is_dirty);
     }
 
     #[test]

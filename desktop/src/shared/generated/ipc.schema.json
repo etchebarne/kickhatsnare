@@ -216,6 +216,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -241,11 +367,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -268,6 +398,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -293,11 +549,379 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.deleteTimelineClip": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "DeleteTimelineClipParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.deleteTimelineTrack": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "DeleteTimelineTrackParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -312,6 +936,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -337,11 +1087,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -371,6 +1125,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -396,11 +1276,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -427,6 +1311,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -452,11 +1462,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -471,6 +1485,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -496,11 +1636,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -523,6 +1667,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -548,11 +1818,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -567,6 +1841,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -592,11 +1992,15 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -619,6 +2023,132 @@
         "type": "object"
       },
       "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "properties": {
           "files": {
@@ -644,11 +2174,642 @@
               "string",
               "null"
             ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
           }
         },
         "required": [
           "name",
           "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.saveTimelineClip": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "name": {
+            "type": "string"
+          },
+          "sourceOffsetTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "startTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "trackId": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "trackId",
+          "name",
+          "startTick",
+          "durationTicks",
+          "sourceOffsetTicks"
+        ],
+        "title": "SaveTimelineClipParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.saveTimelineTrack": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "isMuted": {
+            "type": "boolean"
+          },
+          "isSoloed": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "isMuted",
+          "isSoloed"
+        ],
+        "title": "SaveTimelineTrackParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
+    "workspace.setTimelineSettings": {
+      "params": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "bpm": {
+            "format": "double",
+            "type": "number"
+          },
+          "gridDivision": {
+            "$ref": "#/$defs/GridDivision"
+          },
+          "isSnapEnabled": {
+            "type": "boolean"
+          },
+          "timeSignatureDenominator": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          },
+          "timeSignatureNumerator": {
+            "format": "uint8",
+            "maximum": 255,
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "bpm",
+          "timeSignatureNumerator",
+          "timeSignatureDenominator",
+          "gridDivision",
+          "isSnapEnabled"
+        ],
+        "title": "SetTimelineSettingsParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "clips"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
           "isDirty"
         ],
         "title": "WorkspaceSnapshot",
@@ -656,5 +2817,5 @@
       }
     }
   },
-  "protocolVersion": 6
+  "protocolVersion": 7
 }

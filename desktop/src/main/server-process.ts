@@ -36,6 +36,15 @@ const schemaDocument: {
   methods: Record<IpcMethod, Record<SchemaPart, JsonSchema>>;
 } = contractSchema;
 const ajv = new Ajv2020({ allErrors: true, strict: true });
+ajv.addFormat("double", { type: "number", validate: Number.isFinite });
+ajv.addFormat("uint8", {
+  type: "number",
+  validate: (value: number) => Number.isInteger(value) && value >= 0 && value <= 255,
+});
+ajv.addFormat("uint32", {
+  type: "number",
+  validate: (value: number) => Number.isInteger(value) && value >= 0 && value <= 4_294_967_295,
+});
 const validatorCache = new Map<string, ValidateFunction>();
 
 export class CoreServer {
@@ -101,6 +110,18 @@ export class CoreServer {
     return this.#request("workspace.deleteEntry", { path });
   }
 
+  deleteTimelineClip(
+    params: ParamsFor<"workspace.deleteTimelineClip">,
+  ): Promise<ResultFor<"workspace.deleteTimelineClip">> {
+    return this.#request("workspace.deleteTimelineClip", params);
+  }
+
+  deleteTimelineTrack(
+    params: ParamsFor<"workspace.deleteTimelineTrack">,
+  ): Promise<ResultFor<"workspace.deleteTimelineTrack">> {
+    return this.#request("workspace.deleteTimelineTrack", params);
+  }
+
   getWorkspace(): Promise<ResultFor<"workspace.get">> {
     return this.#request("workspace.get", {});
   }
@@ -133,6 +154,24 @@ export class CoreServer {
 
   saveWorkspaceAs(directoryPath: string): Promise<ResultFor<"workspace.saveAs">> {
     return this.#request("workspace.saveAs", { directoryPath });
+  }
+
+  saveTimelineClip(
+    params: ParamsFor<"workspace.saveTimelineClip">,
+  ): Promise<ResultFor<"workspace.saveTimelineClip">> {
+    return this.#request("workspace.saveTimelineClip", params);
+  }
+
+  saveTimelineTrack(
+    params: ParamsFor<"workspace.saveTimelineTrack">,
+  ): Promise<ResultFor<"workspace.saveTimelineTrack">> {
+    return this.#request("workspace.saveTimelineTrack", params);
+  }
+
+  setTimelineSettings(
+    params: ParamsFor<"workspace.setTimelineSettings">,
+  ): Promise<ResultFor<"workspace.setTimelineSettings">> {
+    return this.#request("workspace.setTimelineSettings", params);
   }
 
   stop(): void {
