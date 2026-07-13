@@ -127,6 +127,14 @@ export class CoreServer {
     return this.#request("library.unpinFolder", { id });
   }
 
+  getSettings(): Promise<ResultFor<"settings.get">> {
+    return this.#request("settings.get", {});
+  }
+
+  setSetting(params: ParamsFor<"settings.set">): Promise<ResultFor<"settings.set">> {
+    return this.#request("settings.set", params);
+  }
+
   createWorkspaceDirectory(path: string): Promise<ResultFor<"workspace.createDirectory">> {
     return this.#request("workspace.createDirectory", { path });
   }

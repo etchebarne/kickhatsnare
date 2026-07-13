@@ -4,7 +4,7 @@ mod renderer;
 use std::{fmt, path::Path, sync::Arc};
 
 use crossbeam_queue::ArrayQueue;
-use rodio::{OutputStream, OutputStreamBuilder};
+use rodio::{OutputStream, OutputStreamBuilder, cpal::BufferSize};
 
 pub use decoder::DecodedAudio;
 use renderer::{
@@ -32,11 +32,11 @@ pub struct TransportSnapshot {
     pub last_error: Option<String>,
 }
 
-#[derive(Default)]
 pub struct Audio {
     session: Option<PlaybackSession>,
     stopped_position_tick: u32,
     last_error: Option<String>,
+    buffer_size: u32,
 }
 
 struct PlaybackSession {
@@ -54,11 +54,32 @@ impl fmt::Debug for Audio {
             .field("has_session", &self.session.is_some())
             .field("stopped_position_tick", &self.stopped_position_tick)
             .field("last_error", &self.last_error)
+            .field("buffer_size", &self.buffer_size)
             .finish()
     }
 }
 
+impl Default for Audio {
+    fn default() -> Self {
+        Self::new(crate::settings::DEFAULT_AUDIO_BUFFER_SIZE)
+    }
+}
+
 impl Audio {
+    #[must_use]
+    pub(crate) fn new(buffer_size: u32) -> Self {
+        Self {
+            session: None,
+            stopped_position_tick: 0,
+            last_error: None,
+            buffer_size,
+        }
+    }
+
+    pub(crate) fn set_buffer_size(&mut self, buffer_size: u32) {
+        self.buffer_size = buffer_size;
+    }
+
     /// Decodes an audio source and returns metadata plus bounded waveform peaks.
     ///
     /// # Errors
@@ -93,7 +114,9 @@ impl Audio {
             return Ok(self.transport());
         }
 
-        let mut stream = OutputStreamBuilder::open_default_stream()
+        let mut stream = OutputStreamBuilder::from_default_device()
+            .map(|builder| builder.with_buffer_size(BufferSize::Fixed(self.buffer_size)))
+            .and_then(OutputStreamBuilder::open_stream)
             .map_err(|error| CoreError::new(format!("failed to open audio output: {error}")))?;
         stream.log_on_drop(false);
         let sample_rate = stream.config().sample_rate();

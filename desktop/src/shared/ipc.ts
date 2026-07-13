@@ -1,6 +1,8 @@
 import type { ParamsFor, ResultFor } from "./generated/ipc";
 
 export type LibrarySnapshot = ResultFor<"library.get">;
+export type SettingsSnapshot = ResultFor<"settings.get">;
+export type SetSettingParams = ParamsFor<"settings.set">;
 export type WorkspaceSnapshot = ResultFor<"workspace.get">;
 export type DeleteTimelineClipParams = ParamsFor<"workspace.deleteTimelineClip">;
 export type DeleteTimelineTrackParams = ParamsFor<"workspace.deleteTimelineTrack">;
@@ -24,6 +26,8 @@ export const ipcChannels = {
   libraryPinFolder: "library:pin-folder",
   libraryUnpinFolder: "library:unpin-folder",
   ping: "core:ping",
+  settingsGet: "settings:get",
+  settingsSet: "settings:set",
   workspaceCreateDirectory: "workspace:create-directory",
   workspaceAddAudioClip: "workspace:add-audio-clip",
   workspaceConnectMixPorts: "workspace:connect-mix-ports",
@@ -60,6 +64,8 @@ export interface KickHatSnareApi {
   getLibrary(): Promise<LibrarySnapshot>;
   pinFolder(): Promise<LibrarySnapshot | null>;
   unpinFolder(id: string): Promise<LibrarySnapshot>;
+  getSettings(): Promise<SettingsSnapshot>;
+  setSetting(params: SetSettingParams): Promise<SettingsSnapshot>;
   createWorkspaceDirectory(path: string): Promise<WorkspaceSnapshot>;
   addAudioClip(params: AddAudioClipParams): Promise<WorkspaceSnapshot>;
   connectMixPorts(params: ConnectMixPortsParams): Promise<WorkspaceSnapshot>;

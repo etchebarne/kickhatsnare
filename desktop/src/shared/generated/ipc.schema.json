@@ -439,6 +439,282 @@
         "type": "object"
       }
     },
+    "settings.get": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "title": "GetSettingsParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "IntegerSettingOption": {
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "value",
+              "label"
+            ],
+            "type": "object"
+          },
+          "Setting": {
+            "oneOf": [
+              {
+                "properties": {
+                  "defaultValue": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "integerSelect",
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "items": {
+                      "$ref": "#/$defs/IntegerSettingOption"
+                    },
+                    "type": "array"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "label",
+                  "description",
+                  "value",
+                  "defaultValue",
+                  "unit",
+                  "options"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "SettingCategory": {
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "settings": {
+                "items": {
+                  "$ref": "#/$defs/Setting"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "description",
+              "settings"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/$defs/SettingCategory"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "title": "SettingsSnapshot",
+        "type": "object"
+      }
+    },
+    "settings.set": {
+      "params": {
+        "$defs": {
+          "SettingValue": {
+            "oneOf": [
+              {
+                "properties": {
+                  "kind": {
+                    "const": "integer",
+                    "type": "string"
+                  },
+                  "value": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "value"
+                ],
+                "type": "object"
+              }
+            ]
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/$defs/SettingValue"
+          }
+        },
+        "required": [
+          "id",
+          "value"
+        ],
+        "title": "SetSettingParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "IntegerSettingOption": {
+            "properties": {
+              "label": {
+                "type": "string"
+              },
+              "value": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "value",
+              "label"
+            ],
+            "type": "object"
+          },
+          "Setting": {
+            "oneOf": [
+              {
+                "properties": {
+                  "defaultValue": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  },
+                  "description": {
+                    "type": "string"
+                  },
+                  "id": {
+                    "type": "string"
+                  },
+                  "kind": {
+                    "const": "integerSelect",
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  },
+                  "options": {
+                    "items": {
+                      "$ref": "#/$defs/IntegerSettingOption"
+                    },
+                    "type": "array"
+                  },
+                  "unit": {
+                    "type": "string"
+                  },
+                  "value": {
+                    "format": "uint32",
+                    "minimum": 0,
+                    "type": "integer"
+                  }
+                },
+                "required": [
+                  "kind",
+                  "id",
+                  "label",
+                  "description",
+                  "value",
+                  "defaultValue",
+                  "unit",
+                  "options"
+                ],
+                "type": "object"
+              }
+            ]
+          },
+          "SettingCategory": {
+            "properties": {
+              "description": {
+                "type": "string"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "settings": {
+                "items": {
+                  "$ref": "#/$defs/Setting"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "description",
+              "settings"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/$defs/SettingCategory"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "categories"
+        ],
+        "title": "SettingsSnapshot",
+        "type": "object"
+      }
+    },
     "system.ping": {
       "params": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -8904,5 +9180,5 @@
       }
     }
   },
-  "protocolVersion": 10
+  "protocolVersion": 11
 }

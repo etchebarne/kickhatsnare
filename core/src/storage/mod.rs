@@ -5,13 +5,21 @@ use rusqlite::Connection;
 use crate::CoreError;
 
 const DATABASE_FILE_NAME: &str = "kickhatsnare.sqlite3";
-const MIGRATIONS: &[&str] = &[r"
-    CREATE TABLE pinned_folders (
-        id INTEGER PRIMARY KEY,
-        path TEXT NOT NULL UNIQUE,
-        position INTEGER NOT NULL UNIQUE
-    );
-"];
+const MIGRATIONS: &[&str] = &[
+    r"
+        CREATE TABLE pinned_folders (
+            id INTEGER PRIMARY KEY,
+            path TEXT NOT NULL UNIQUE,
+            position INTEGER NOT NULL UNIQUE
+        );
+    ",
+    r"
+        CREATE TABLE settings (
+            id TEXT PRIMARY KEY,
+            value_json TEXT NOT NULL
+        );
+    ",
+];
 
 #[derive(Debug)]
 pub(crate) struct Database {

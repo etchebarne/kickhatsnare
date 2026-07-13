@@ -8,6 +8,7 @@ import {
   MenubarTrigger,
 } from "@/components/ui/menubar";
 import { useAppStore } from "@/stores/app-store";
+import { useSettingsStore } from "@/stores/settings-store";
 
 export function AppMenu() {
   const serverStatus = useAppStore((state) => state.serverStatus);
@@ -18,6 +19,7 @@ export function AppMenu() {
   const saveProjectAs = useAppStore((state) => state.saveProjectAs);
   const undo = useAppStore((state) => state.undo);
   const redo = useAppStore((state) => state.redo);
+  const openSettings = useSettingsStore((state) => state.open);
   const unavailable = serverStatus !== "ready";
 
   return (
@@ -78,7 +80,9 @@ export function AppMenu() {
             </KbdGroup>
           </MenubarItem>
           <MenubarSeparator />
-          <MenubarItem disabled>Preferences</MenubarItem>
+          <MenubarItem disabled={unavailable} onSelect={openSettings}>
+            Settings...
+          </MenubarItem>
         </MenubarContent>
       </MenubarMenu>
 

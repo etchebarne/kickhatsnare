@@ -138,6 +138,8 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.libraryUnpinFolder, (_event, id: string) =>
     getCoreServer().unpinFolder(id),
   );
+  ipcMain.handle(ipcChannels.settingsGet, () => getCoreServer().getSettings());
+  ipcMain.handle(ipcChannels.settingsSet, (_event, params) => getCoreServer().setSetting(params));
   ipcMain.handle(ipcChannels.workspaceCreateDirectory, (_event, path: string) =>
     getCoreServer().createWorkspaceDirectory(path),
   );
@@ -215,6 +217,8 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.libraryGet);
   ipcMain.removeHandler(ipcChannels.libraryPinFolder);
   ipcMain.removeHandler(ipcChannels.libraryUnpinFolder);
+  ipcMain.removeHandler(ipcChannels.settingsGet);
+  ipcMain.removeHandler(ipcChannels.settingsSet);
   ipcMain.removeHandler(ipcChannels.workspaceCreateDirectory);
   ipcMain.removeHandler(ipcChannels.workspaceAddAudioClip);
   ipcMain.removeHandler(ipcChannels.workspaceConnectMixPorts);

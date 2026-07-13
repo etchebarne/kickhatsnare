@@ -3,6 +3,7 @@ use std::{fmt, path::Path};
 use crate::{
     audio::{Audio, TransportSnapshot, TransportState},
     library::Library,
+    settings::{AUDIO_BUFFER_SIZE_ID, SettingValue, Settings, SettingsSnapshot},
     system::System,
     workspace::{WorkspaceSnapshot, Workspaces},
 };
@@ -34,15 +35,21 @@ impl std::error::Error for CoreError {}
 pub struct Core {
     audio: Audio,
     library: Library,
+    settings: Settings,
     system: System,
     workspaces: Workspaces,
 }
 
 impl Default for Core {
     fn default() -> Self {
+        let settings = Settings::in_memory().expect("in-memory settings should initialize");
+        let buffer_size = settings
+            .audio_buffer_size()
+            .expect("default audio buffer size should load");
         Self {
-            audio: Audio::default(),
+            audio: Audio::new(buffer_size),
             library: Library::in_memory().expect("in-memory application storage should initialize"),
+            settings,
             system: System,
             workspaces: Workspaces::default(),
         }
@@ -61,9 +68,13 @@ impl Core {
     ///
     /// Returns an error if the data directory or database cannot be initialized.
     pub fn open(data_directory: impl AsRef<Path>) -> Result<Self, CoreError> {
+        let data_directory = data_directory.as_ref();
+        let settings = Settings::open(data_directory)?;
+        let buffer_size = settings.audio_buffer_size()?;
         Ok(Self {
-            audio: Audio::default(),
+            audio: Audio::new(buffer_size),
             library: Library::open(data_directory)?,
+            settings,
             system: System,
             workspaces: Workspaces::default(),
         })
@@ -79,6 +90,33 @@ impl Core {
 
     pub fn system(&mut self) -> &mut System {
         &mut self.system
+    }
+
+    /// Returns the backend-owned settings registry and effective values.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if persisted settings cannot be read.
+    pub fn settings_snapshot(&self) -> Result<SettingsSnapshot, CoreError> {
+        self.settings.snapshot()
+    }
+
+    /// Updates a setting and applies its effective value to the relevant feature.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the setting value is invalid or cannot be persisted.
+    pub fn set_setting(
+        &mut self,
+        id: &str,
+        value: SettingValue,
+    ) -> Result<SettingsSnapshot, CoreError> {
+        let snapshot = self.settings.set(id, value)?;
+        if id == AUDIO_BUFFER_SIZE_ID {
+            let SettingValue::Integer(buffer_size) = value;
+            self.audio.set_buffer_size(buffer_size);
+        }
+        Ok(snapshot)
     }
 
     pub fn workspaces(&mut self) -> &mut Workspaces {

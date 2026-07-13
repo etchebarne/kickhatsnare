@@ -12,6 +12,8 @@ const api: KickHatSnareApi = {
   getLibrary: () => ipcRenderer.invoke(ipcChannels.libraryGet),
   pinFolder: () => ipcRenderer.invoke(ipcChannels.libraryPinFolder),
   unpinFolder: (id) => ipcRenderer.invoke(ipcChannels.libraryUnpinFolder, id),
+  getSettings: () => ipcRenderer.invoke(ipcChannels.settingsGet),
+  setSetting: (params) => ipcRenderer.invoke(ipcChannels.settingsSet, params),
   createWorkspaceDirectory: (path) =>
     ipcRenderer.invoke(ipcChannels.workspaceCreateDirectory, path),
   addAudioClip: (params) => ipcRenderer.invoke(ipcChannels.workspaceAddAudioClip, params),

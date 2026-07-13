@@ -3,6 +3,7 @@ import { Network, Rows3 } from "lucide-react";
 
 import { MixGraphEditor } from "@/components/custom/mix-graph";
 import { ProjectSidebar } from "@/components/custom/project-sidebar";
+import { SettingsDialog } from "@/components/custom/settings";
 import {
   TimelineEditor,
   TimelineHeaderControls,
@@ -126,6 +127,7 @@ export function App() {
           </main>
         </SidebarInset>
       </SidebarProvider>
+      <SettingsDialog />
     </div>
   );
 }
