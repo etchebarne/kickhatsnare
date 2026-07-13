@@ -2,6 +2,8 @@ import { create } from "zustand";
 
 import type {
   AddAudioClipParams,
+  ConnectMixPortsParams,
+  DisconnectMixPortsParams,
   LibrarySnapshot,
   SaveTimelineClipParams,
   SaveTimelineTrackParams,
@@ -23,15 +25,18 @@ interface AppState {
   connect(): Promise<void>;
   createWorkspaceDirectory(path: string): Promise<boolean>;
   addAudioClip(params: AddAudioClipParams): Promise<boolean>;
+  connectMixPorts(params: ConnectMixPortsParams): Promise<boolean>;
   deleteWorkspaceEntry(path: string): Promise<boolean>;
   deleteTimelineClip(id: string): Promise<boolean>;
   deleteTimelineTrack(id: string): Promise<boolean>;
-  importAudioFiles(files: File[], targetDirectory: string): Promise<void>;
+  disconnectMixPorts(params: DisconnectMixPortsParams): Promise<boolean>;
+  importAudioFiles(files: File[], targetDirectory: string): Promise<string[]>;
   moveWorkspaceEntry(sourcePath: string, destinationPath: string): Promise<boolean>;
   pinFolder(): Promise<boolean>;
   unpinFolder(id: string): Promise<boolean>;
   newProject(): Promise<void>;
   openProject(): Promise<void>;
+  redo(): Promise<boolean>;
   saveProject(): Promise<void>;
   saveProjectAs(): Promise<void>;
   saveTimelineClip(params: SaveTimelineClipParams): Promise<boolean>;
@@ -39,9 +44,10 @@ interface AppState {
   setTimelineSettings(params: SetTimelineSettingsParams): Promise<boolean>;
   setMasterMix(params: SetMasterMixParams): Promise<boolean>;
   setMixNodePosition(params: SetMixNodePositionParams): Promise<boolean>;
+  undo(): Promise<boolean>;
 }
 
-export const useAppStore = create<AppState>((set) => ({
+export const useAppStore = create<AppState>((set, get) => ({
   serverStatus: "connecting",
   library: null,
   workspace: null,
@@ -67,6 +73,9 @@ export const useAppStore = create<AppState>((set) => ({
   async addAudioClip(params) {
     return updateWorkspace(set, () => window.kickHatSnare.addAudioClip(params));
   },
+  async connectMixPorts(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.connectMixPorts(params));
+  },
   async deleteWorkspaceEntry(path) {
     return updateWorkspace(set, () => window.kickHatSnare.deleteWorkspaceEntry(path));
   },
@@ -76,8 +85,21 @@ export const useAppStore = create<AppState>((set) => ({
   async deleteTimelineTrack(id) {
     return updateWorkspace(set, () => window.kickHatSnare.deleteTimelineTrack({ id }));
   },
+  async disconnectMixPorts(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.disconnectMixPorts(params));
+  },
   async importAudioFiles(files, targetDirectory) {
-    await updateWorkspace(set, () => window.kickHatSnare.importAudioFiles(files, targetDirectory));
+    const previousFiles = new Set(get().workspace?.files ?? []);
+    set({ operationError: null });
+    try {
+      const workspace = await window.kickHatSnare.importAudioFiles(files, targetDirectory);
+      set({ workspace });
+      await useTransportStore.getState().refresh();
+      return workspace.files.filter((path) => !path.endsWith("/") && !previousFiles.has(path));
+    } catch (error) {
+      set({ operationError: errorMessage(error) });
+      return [];
+    }
   },
   async moveWorkspaceEntry(sourcePath, destinationPath) {
     return updateWorkspace(set, () =>
@@ -95,6 +117,10 @@ export const useAppStore = create<AppState>((set) => ({
   },
   async openProject() {
     await updateWorkspace(set, () => window.kickHatSnare.openProject());
+  },
+  async redo() {
+    if (!get().workspace?.history.canRedo) return false;
+    return updateWorkspace(set, () => window.kickHatSnare.redoWorkspace());
   },
   async saveProject() {
     await updateWorkspace(set, () => window.kickHatSnare.saveProject());
@@ -116,6 +142,10 @@ export const useAppStore = create<AppState>((set) => ({
   },
   async setMixNodePosition(params) {
     return updateWorkspace(set, () => window.kickHatSnare.setMixNodePosition(params));
+  },
+  async undo() {
+    if (!get().workspace?.history.canUndo) return false;
+    return updateWorkspace(set, () => window.kickHatSnare.undoWorkspace());
   },
 }));
 

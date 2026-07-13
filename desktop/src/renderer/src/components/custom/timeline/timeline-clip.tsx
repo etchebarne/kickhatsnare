@@ -259,8 +259,8 @@ export function TimelineClip({
       onPointerMove={handlePointerMove}
       onPointerUp={finishDrag}
       onPointerCancel={cancelDrag}
-      onKeyDown={(event) => {
-        if (event.key !== "Delete" && event.key !== "Backspace") return;
+      onFocus={() => onSelect(clip.id)}
+      onContextMenu={(event) => {
         event.preventDefault();
         onDelete(clip.id);
       }}

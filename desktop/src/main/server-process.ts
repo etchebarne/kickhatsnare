@@ -137,6 +137,12 @@ export class CoreServer {
     return this.#request("workspace.addAudioClip", params);
   }
 
+  connectMixPorts(
+    params: ParamsFor<"workspace.connectMixPorts">,
+  ): Promise<ResultFor<"workspace.connectMixPorts">> {
+    return this.#request("workspace.connectMixPorts", params);
+  }
+
   deleteWorkspaceEntry(path: string): Promise<ResultFor<"workspace.deleteEntry">> {
     return this.#request("workspace.deleteEntry", { path });
   }
@@ -151,6 +157,12 @@ export class CoreServer {
     params: ParamsFor<"workspace.deleteTimelineTrack">,
   ): Promise<ResultFor<"workspace.deleteTimelineTrack">> {
     return this.#request("workspace.deleteTimelineTrack", params);
+  }
+
+  disconnectMixPorts(
+    params: ParamsFor<"workspace.disconnectMixPorts">,
+  ): Promise<ResultFor<"workspace.disconnectMixPorts">> {
+    return this.#request("workspace.disconnectMixPorts", params);
   }
 
   getWorkspace(): Promise<ResultFor<"workspace.get">> {
@@ -177,6 +189,10 @@ export class CoreServer {
 
   openWorkspace(projectFilePath: string): Promise<ResultFor<"workspace.open">> {
     return this.#request("workspace.open", { projectFilePath });
+  }
+
+  redoWorkspace(): Promise<ResultFor<"workspace.redo">> {
+    return this.#request("workspace.redo", {});
   }
 
   saveWorkspace(): Promise<ResultFor<"workspace.save">> {
@@ -215,6 +231,10 @@ export class CoreServer {
     params: ParamsFor<"workspace.setMixNodePosition">,
   ): Promise<ResultFor<"workspace.setMixNodePosition">> {
     return this.#request("workspace.setMixNodePosition", params);
+  }
+
+  undoWorkspace(): Promise<ResultFor<"workspace.undo">> {
+    return this.#request("workspace.undo", {});
   }
 
   stop(): void {

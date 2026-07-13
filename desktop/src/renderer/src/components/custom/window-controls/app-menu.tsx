@@ -16,6 +16,8 @@ export function AppMenu() {
   const openProject = useAppStore((state) => state.openProject);
   const saveProject = useAppStore((state) => state.saveProject);
   const saveProjectAs = useAppStore((state) => state.saveProjectAs);
+  const undo = useAppStore((state) => state.undo);
+  const redo = useAppStore((state) => state.redo);
   const unavailable = serverStatus !== "ready";
 
   return (
@@ -60,15 +62,15 @@ export function AppMenu() {
           Edit
         </MenubarTrigger>
         <MenubarContent>
-          <MenubarItem disabled>
-            Undo
+          <MenubarItem disabled={!workspace?.history.canUndo} onSelect={() => void undo()}>
+            {workspace?.history.undoLabel ? `Undo ${workspace.history.undoLabel}` : "Undo"}
             <KbdGroup className="ml-auto">
               <Kbd>Ctrl</Kbd>
               <Kbd>Z</Kbd>
             </KbdGroup>
           </MenubarItem>
-          <MenubarItem disabled>
-            Redo
+          <MenubarItem disabled={!workspace?.history.canRedo} onSelect={() => void redo()}>
+            {workspace?.history.redoLabel ? `Redo ${workspace.history.redoLabel}` : "Redo"}
             <KbdGroup className="ml-auto">
               <Kbd>Ctrl</Kbd>
               <Kbd>Shift</Kbd>

@@ -9,7 +9,7 @@ import {
 import { Plus, Trash2 } from "lucide-react";
 
 import { TimelineClip } from "./timeline-clip";
-import { TimelinePlayhead, TransportPosition } from "./timeline-playhead";
+import { TimelinePlayhead } from "./timeline-playhead";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
@@ -28,6 +28,18 @@ const MAX_HORIZONTAL_ZOOM = 768;
 const MIN_TRACK_HEIGHT = 44;
 const MAX_TRACK_HEIGHT = 160;
 const AUDIO_DRAG_TYPE = "application/x-kickhatsnare-audio";
+const AUDIO_EXTENSIONS = new Set([
+  "aif",
+  "aiff",
+  "flac",
+  "m4a",
+  "mp3",
+  "oga",
+  "ogg",
+  "opus",
+  "wav",
+  "wave",
+]);
 
 export function TimelineEditor() {
   const workspace = useAppStore((state) => state.workspace);
@@ -36,13 +48,58 @@ export function TimelineEditor() {
   const saveTimelineClip = useAppStore((state) => state.saveTimelineClip);
   const deleteTimelineClip = useAppStore((state) => state.deleteTimelineClip);
   const addAudioClip = useAppStore((state) => state.addAudioClip);
+  const importAudioFiles = useAppStore((state) => state.importAudioFiles);
   const seek = useTransportStore((state) => state.seek);
   const scrollContainer = useRef<HTMLDivElement>(null);
   const trackHeight = useRef(80);
   const horizontalZoom = useRef(96);
   const [pixelsPerQuarter, setPixelsPerQuarter] = useState(96);
+  const [viewportWidth, setViewportWidth] = useState(0);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const timelineForZoom = workspace?.timeline;
+  const zoomMetrics = timelineForZoom ? timelineMetrics(timelineForZoom) : null;
+  const minimumHorizontalZoom = zoomMetrics
+    ? Math.min(
+        MIN_HORIZONTAL_ZOOM,
+        Math.max(
+          0.5,
+          (Math.max(200, viewportWidth - TRACK_HEADER_WIDTH - 16) * zoomMetrics.ticksPerQuarter) /
+            zoomMetrics.totalTicks,
+        ),
+      )
+    : MIN_HORIZONTAL_ZOOM;
+
+  useEffect(() => {
+    const container = scrollContainer.current;
+    if (!container || !timelineForZoom) return;
+    const observer = new ResizeObserver(() => setViewportWidth(container.clientWidth));
+    observer.observe(container);
+    setViewportWidth(container.clientWidth);
+    return () => observer.disconnect();
+  }, [timelineForZoom]);
+
+  useEffect(() => {
+    if (horizontalZoom.current >= minimumHorizontalZoom) return;
+    horizontalZoom.current = minimumHorizontalZoom;
+    setPixelsPerQuarter(minimumHorizontalZoom);
+  }, [minimumHorizontalZoom]);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (
+        selectedClipId === null ||
+        (event.key !== "Delete" && event.key !== "Backspace") ||
+        isEditable(event.target)
+      ) {
+        return;
+      }
+      event.preventDefault();
+      setSelectedClipId(null);
+      void deleteTimelineClip(selectedClipId);
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [deleteTimelineClip, selectedClipId]);
 
   useEffect(() => {
     const container = scrollContainer.current;
@@ -92,7 +149,7 @@ export function TimelineEditor() {
         (activeContainer.scrollLeft + pointerX - TRACK_HEADER_WIDTH) / currentPixelsPerTick,
       );
       const nextZoom = Math.max(
-        MIN_HORIZONTAL_ZOOM,
+        minimumHorizontalZoom,
         Math.min(MAX_HORIZONTAL_ZOOM, horizontalZoom.current * Math.exp(-event.deltaY * 0.002)),
       );
       if (nextZoom === horizontalZoom.current) return;
@@ -124,24 +181,22 @@ export function TimelineEditor() {
         window.cancelAnimationFrame(verticalAnimationFrame);
       }
     };
-  }, [pixelsPerQuarter, timelineForZoom]);
+  }, [minimumHorizontalZoom, pixelsPerQuarter, timelineForZoom]);
 
   if (!workspace) return null;
   const { timeline } = workspace;
-  const ticksPerBeat = (timeline.ticksPerQuarter * 4) / timeline.timeSignatureDenominator;
-  const ticksPerBar = ticksPerBeat * timeline.timeSignatureNumerator;
+  const { ticksPerBeat, ticksPerBar, totalBars, totalTicks } = timelineMetrics(timeline);
   const pixelsPerTick = pixelsPerQuarter / timeline.ticksPerQuarter;
-  const automaticGrid = gridForZoom(timeline.ticksPerQuarter, pixelsPerQuarter);
-  const gridTicks = automaticGrid.ticks;
-  const maxClipEnd = timeline.tracks.reduce(
-    (maximum, track) =>
-      Math.max(maximum, ...track.clips.map((clip) => clip.startTick + clip.durationTicks)),
-    0,
+  const automaticGrid = gridForZoom(
+    timeline.ticksPerQuarter,
+    ticksPerBeat,
+    ticksPerBar,
+    pixelsPerQuarter,
+    totalTicks,
   );
-  const totalBars = Math.max(DEFAULT_BARS, Math.ceil(maxClipEnd / ticksPerBar) + 4);
-  const totalTicks = totalBars * ticksPerBar;
+  const gridTicks = automaticGrid.ticks;
   const timelineWidth = totalTicks * pixelsPerTick;
-  const laneStyle = timelineGridStyle(gridTicks, ticksPerBeat, ticksPerBar, pixelsPerTick);
+  const laneStyle = timelineGridStyle(automaticGrid, pixelsPerTick);
 
   function snapTick(tick: number) {
     const bounded = Math.max(0, Math.min(Math.round(tick), totalTicks));
@@ -161,7 +216,6 @@ export function TimelineEditor() {
       isSoloed: false,
       gainDb: 0,
       pan: 0,
-      isConnected: true,
     });
   }
 
@@ -173,7 +227,6 @@ export function TimelineEditor() {
       isSoloed: update.isSoloed ?? track.isSoloed,
       gainDb: update.gainDb ?? track.gainDb,
       pan: update.pan ?? track.pan,
-      isConnected: update.isConnected ?? track.isConnected,
     });
   }
 
@@ -211,23 +264,63 @@ export function TimelineEditor() {
   }
 
   function handleAudioDragOver(event: DragEvent<HTMLDivElement>) {
-    if (!event.dataTransfer.types.includes(AUDIO_DRAG_TYPE)) return;
+    if (
+      !event.dataTransfer.types.includes(AUDIO_DRAG_TYPE) &&
+      !event.dataTransfer.types.includes("Files")
+    ) {
+      return;
+    }
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
   }
 
   function handleAudioDrop(event: DragEvent<HTMLDivElement>, track: TimelineTrack) {
     const sourcePath = event.dataTransfer.getData(AUDIO_DRAG_TYPE);
-    if (!sourcePath) return;
-    event.preventDefault();
     const bounds = event.currentTarget.getBoundingClientRect();
     const startTick = snapTick((event.clientX - bounds.left) / pixelsPerTick);
-    void addAudioClip({ trackId: track.id, sourcePath, startTick });
+    if (sourcePath) {
+      event.preventDefault();
+      void addAudioClip({ trackId: track.id, sourcePath, startTick });
+      return;
+    }
+
+    const files = Array.from(event.dataTransfer.files).filter(isAudioFile);
+    if (files.length === 0) return;
+    event.preventDefault();
+    void importAndPlaceAudio(files, track.id, startTick);
   }
 
-  const rulerBars = Array.from({ length: totalBars }, (_, index) => ({
-    number: index + 1,
-    left: index * ticksPerBar * pixelsPerTick,
+  async function importAndPlaceAudio(files: File[], trackId: string, startTick: number) {
+    let nextTick = startTick;
+    for (const file of files) {
+      const importedPaths = await importAudioFiles([file], "");
+      const workspaceFiles = useAppStore.getState().workspace?.files ?? [];
+      const sourcePath =
+        importedPaths[0] ?? (workspaceFiles.includes(file.name) ? file.name : null);
+      if (!sourcePath) continue;
+      const previousClipIds = new Set(
+        useAppStore
+          .getState()
+          .workspace?.timeline.tracks.find((item) => item.id === trackId)
+          ?.clips.map((clip) => clip.id) ?? [],
+      );
+      const added = await addAudioClip({ trackId, sourcePath, startTick: nextTick });
+      if (!added) continue;
+      const track = useAppStore
+        .getState()
+        .workspace?.timeline.tracks.find((item) => item.id === trackId);
+      const clip = track?.clips.find((item) => !previousClipIds.has(item.id));
+      if (clip) nextTick += clip.durationTicks;
+    }
+  }
+
+  const rulerStepBars = Math.max(
+    1,
+    Math.round(Math.max(ticksPerBar, automaticGrid.mediumTicks) / ticksPerBar),
+  );
+  const rulerBars = Array.from({ length: Math.ceil(totalBars / rulerStepBars) }, (_, index) => ({
+    number: index * rulerStepBars + 1,
+    left: index * rulerStepBars * ticksPerBar * pixelsPerTick,
   }));
 
   return (
@@ -344,11 +437,6 @@ export function TimelineEditor() {
                 onMouseDown={(event) => {
                   if (event.target === event.currentTarget) positionPlayhead(event);
                 }}
-                onDoubleClick={(event) => {
-                  if (event.target !== event.currentTarget) return;
-                  const bounds = event.currentTarget.getBoundingClientRect();
-                  addClip(track, (event.clientX - bounds.left) / pixelsPerTick);
-                }}
                 onDragOver={handleAudioDragOver}
                 onDrop={(event) => handleAudioDrop(event, track)}
               >
@@ -384,43 +472,90 @@ export function TimelineEditor() {
           ))}
         </div>
       </div>
-
-      <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-border bg-card px-3 font-mono text-[10px] uppercase tracking-[0.14em] text-muted-foreground">
-        <span>{timeline.tracks.length} tracks</span>
-        <span>{timeline.tracks.reduce((count, track) => count + track.clips.length, 0)} clips</span>
-        <span>{automaticGrid.label} grid</span>
-        <TransportPosition />
-        <span className="ml-auto hidden md:inline">
-          Ctrl+scroll horizontal / Alt+scroll vertical
-        </span>
-      </footer>
     </section>
   );
 }
 
-function gridForZoom(ticksPerQuarter: number, pixelsPerQuarter: number) {
-  const divisions = [
-    { ticks: ticksPerQuarter / 64, label: "1/256" },
-    { ticks: ticksPerQuarter / 32, label: "1/128" },
-    { ticks: ticksPerQuarter / 16, label: "1/64" },
-    { ticks: ticksPerQuarter / 8, label: "1/32" },
-    { ticks: ticksPerQuarter / 4, label: "1/16" },
-    { ticks: ticksPerQuarter / 2, label: "1/8" },
-    { ticks: ticksPerQuarter, label: "1/4" },
-    { ticks: ticksPerQuarter * 2, label: "1/2" },
-    { ticks: ticksPerQuarter * 4, label: "1/1" },
-  ];
-  const pixelsPerTick = pixelsPerQuarter / ticksPerQuarter;
-  for (const division of divisions) {
-    if (division.ticks * pixelsPerTick >= 10) return division;
+function isAudioFile(file: File) {
+  const extension = file.name.split(".").pop()?.toLowerCase();
+  return extension !== undefined && AUDIO_EXTENSIONS.has(extension);
+}
+
+function isEditable(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
+  );
+}
+
+function timelineMetrics(timeline: Timeline) {
+  const ticksPerBeat = (timeline.ticksPerQuarter * 4) / timeline.timeSignatureDenominator;
+  const ticksPerBar = ticksPerBeat * timeline.timeSignatureNumerator;
+  const maxClipEnd = timeline.tracks.reduce(
+    (maximum, track) =>
+      Math.max(maximum, ...track.clips.map((clip) => clip.startTick + clip.durationTicks)),
+    0,
+  );
+  const totalBars = Math.max(DEFAULT_BARS, Math.ceil(maxClipEnd / ticksPerBar) + 4);
+  return {
+    ticksPerQuarter: timeline.ticksPerQuarter,
+    ticksPerBeat,
+    ticksPerBar,
+    totalBars,
+    totalTicks: totalBars * ticksPerBar,
+  };
+}
+
+function gridForZoom(
+  ticksPerQuarter: number,
+  ticksPerBeat: number,
+  ticksPerBar: number,
+  pixelsPerQuarter: number,
+  totalTicks: number,
+) {
+  const candidates = new Map<number, string>();
+  const addCandidate = (ticks: number, label: string) => {
+    if (ticks > 0 && ticks <= ticksPerBeat && !candidates.has(ticks)) {
+      candidates.set(ticks, label);
+    }
+  };
+  addCandidate(ticksPerQuarter / 64, "1/256");
+  addCandidate(ticksPerQuarter / 32, "1/128");
+  addCandidate(ticksPerQuarter / 16, "1/64");
+  addCandidate(ticksPerQuarter / 8, "1/32");
+  addCandidate(ticksPerQuarter / 4, "1/16");
+  addCandidate(ticksPerQuarter / 2, "1/8");
+  addCandidate(ticksPerQuarter, "1/4");
+  if (!candidates.has(ticksPerBeat)) candidates.set(ticksPerBeat, "1 beat");
+
+  const maximumGridTicks = Math.max(totalTicks * 64, ticksPerBar * 16);
+  for (let bars = 1; ticksPerBar * bars <= maximumGridTicks; bars *= 2) {
+    candidates.set(ticksPerBar * bars, bars === 1 ? "1 bar" : `${bars} bars`);
   }
-  return divisions[divisions.length - 1]!;
+  const divisions = Array.from(candidates, ([ticks, label]) => ({ ticks, label })).sort(
+    (left, right) => left.ticks - right.ticks,
+  );
+  const pixelsPerTick = pixelsPerQuarter / ticksPerQuarter;
+  const division =
+    divisions.find((candidate) => candidate.ticks * pixelsPerTick >= 12) ??
+    divisions[divisions.length - 1]!;
+
+  function coarser(current: number) {
+    const target = current * 4;
+    if (current < ticksPerBar && ticksPerBar <= target) return ticksPerBar;
+    return divisions.find((candidate) => candidate.ticks >= target)?.ticks ?? target;
+  }
+
+  const mediumTicks = coarser(division.ticks);
+  return {
+    ...division,
+    mediumTicks,
+    majorTicks: coarser(mediumTicks),
+  };
 }
 
 function timelineGridStyle(
-  gridTicks: number,
-  ticksPerBeat: number,
-  ticksPerBar: number,
+  grid: { ticks: number; mediumTicks: number; majorTicks: number },
   pixelsPerTick: number,
 ): CSSProperties {
   return {
@@ -429,7 +564,7 @@ function timelineGridStyle(
       "linear-gradient(to right, color-mix(in oklch, var(--foreground) 14%, transparent) 1px, transparent 1px)",
       "linear-gradient(to right, color-mix(in oklch, var(--foreground) 28%, transparent) 1px, transparent 1px)",
     ].join(","),
-    backgroundSize: [gridTicks, ticksPerBeat, ticksPerBar]
+    backgroundSize: [grid.ticks, grid.mediumTicks, grid.majorTicks]
       .map((ticks) => `${ticks * pixelsPerTick}px 100%`)
       .join(","),
   };

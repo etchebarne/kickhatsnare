@@ -15,11 +15,14 @@ const api: KickHatSnareApi = {
   createWorkspaceDirectory: (path) =>
     ipcRenderer.invoke(ipcChannels.workspaceCreateDirectory, path),
   addAudioClip: (params) => ipcRenderer.invoke(ipcChannels.workspaceAddAudioClip, params),
+  connectMixPorts: (params) => ipcRenderer.invoke(ipcChannels.workspaceConnectMixPorts, params),
   deleteWorkspaceEntry: (path) => ipcRenderer.invoke(ipcChannels.workspaceDeleteEntry, path),
   deleteTimelineClip: (params) =>
     ipcRenderer.invoke(ipcChannels.workspaceDeleteTimelineClip, params),
   deleteTimelineTrack: (params) =>
     ipcRenderer.invoke(ipcChannels.workspaceDeleteTimelineTrack, params),
+  disconnectMixPorts: (params) =>
+    ipcRenderer.invoke(ipcChannels.workspaceDisconnectMixPorts, params),
   getWorkspace: () => ipcRenderer.invoke(ipcChannels.workspaceGet),
   importAudioFiles: (files, targetDirectory) =>
     ipcRenderer.invoke(ipcChannels.workspaceImportAudio, {
@@ -30,6 +33,7 @@ const api: KickHatSnareApi = {
     ipcRenderer.invoke(ipcChannels.workspaceMoveEntry, sourcePath, destinationPath),
   newProject: () => ipcRenderer.invoke(ipcChannels.workspaceNew),
   openProject: () => ipcRenderer.invoke(ipcChannels.workspaceOpen),
+  redoWorkspace: () => ipcRenderer.invoke(ipcChannels.workspaceRedo),
   saveProject: () => ipcRenderer.invoke(ipcChannels.workspaceSave),
   saveProjectAs: () => ipcRenderer.invoke(ipcChannels.workspaceSaveAs),
   saveTimelineClip: (params) => ipcRenderer.invoke(ipcChannels.workspaceSaveTimelineClip, params),
@@ -39,6 +43,7 @@ const api: KickHatSnareApi = {
   setMasterMix: (params) => ipcRenderer.invoke(ipcChannels.workspaceSetMasterMix, params),
   setMixNodePosition: (params) =>
     ipcRenderer.invoke(ipcChannels.workspaceSetMixNodePosition, params),
+  undoWorkspace: () => ipcRenderer.invoke(ipcChannels.workspaceUndo),
   minimizeWindow: () => ipcRenderer.invoke(ipcChannels.windowMinimize),
   toggleMaximizeWindow: () => ipcRenderer.invoke(ipcChannels.windowToggleMaximize),
   closeWindow: () => ipcRenderer.invoke(ipcChannels.windowClose),

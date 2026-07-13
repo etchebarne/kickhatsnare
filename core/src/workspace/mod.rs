@@ -1,5 +1,5 @@
 use std::{
-    collections::HashSet,
+    collections::{HashSet, VecDeque},
     fs::{self, File},
     io::{self, Write},
     path::{Component, Path, PathBuf},
@@ -10,14 +10,20 @@ use tempfile::NamedTempFile;
 
 use crate::CoreError;
 
+mod mix_graph;
 mod timeline;
 
+pub use mix_graph::{
+    MixConnection, MixGraphSnapshot, MixNodeKind, MixNodeSnapshot, MixPortDirection,
+    MixPortSnapshot, MixSignalType,
+};
 use timeline::Timeline;
 pub use timeline::{GridDivision, TimelineClipSnapshot, TimelineSnapshot, TimelineTrackSnapshot};
 
 const PROJECT_FILE_NAME: &str = "project.khs";
-const PROJECT_FORMAT_VERSION: u32 = 3;
+const PROJECT_FORMAT_VERSION: u32 = 4;
 const OLDEST_SUPPORTED_PROJECT_FORMAT_VERSION: u32 = 1;
+const MAX_HISTORY_ENTRIES: usize = 200;
 
 /// Owns the active project session and its persistence operations.
 #[derive(Debug)]
@@ -33,7 +39,34 @@ struct Workspace {
     pending_imports: Vec<PendingImport>,
     virtual_directories: HashSet<PathBuf>,
     timeline: Timeline,
+    history: EditHistory,
+    non_timeline_dirty: bool,
     is_dirty: bool,
+}
+
+#[derive(Debug)]
+struct EditHistory {
+    undo: VecDeque<HistoryState>,
+    redo: Vec<HistoryState>,
+    current_revision: u64,
+    saved_revision: u64,
+    next_revision: u64,
+    last_impact: Option<WorkspaceEditImpact>,
+}
+
+#[derive(Debug)]
+struct HistoryState {
+    label: String,
+    timeline: Timeline,
+    revision: u64,
+    impact: WorkspaceEditImpact,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WorkspaceEditImpact {
+    None,
+    Mix,
+    Timeline,
 }
 
 #[derive(Debug, Clone)]
@@ -49,7 +82,16 @@ pub struct WorkspaceSnapshot {
     pub project_file_path: Option<PathBuf>,
     pub files: Vec<String>,
     pub timeline: TimelineSnapshot,
+    pub history: WorkspaceHistorySnapshot,
     pub is_dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkspaceHistorySnapshot {
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub undo_label: Option<String>,
+    pub redo_label: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -74,6 +116,7 @@ pub struct PlaybackTrack {
 
 #[derive(Debug, Clone)]
 pub struct PlaybackClip {
+    pub id: String,
     pub source_path: PathBuf,
     pub start_tick: u32,
     pub duration_ticks: u32,
@@ -106,8 +149,125 @@ impl Workspace {
             pending_imports: Vec::new(),
             virtual_directories: HashSet::new(),
             timeline: Timeline::default(),
+            history: EditHistory::default(),
+            non_timeline_dirty: false,
             is_dirty: false,
         }
+    }
+
+    fn refresh_dirty(&mut self) {
+        self.is_dirty = self.non_timeline_dirty || self.history.is_dirty();
+    }
+
+    fn mark_non_timeline_dirty(&mut self) {
+        self.non_timeline_dirty = true;
+        self.refresh_dirty();
+    }
+}
+
+impl Default for EditHistory {
+    fn default() -> Self {
+        Self {
+            undo: VecDeque::new(),
+            redo: Vec::new(),
+            current_revision: 0,
+            saved_revision: 0,
+            next_revision: 1,
+            last_impact: None,
+        }
+    }
+}
+
+impl EditHistory {
+    fn snapshot(&self) -> WorkspaceHistorySnapshot {
+        WorkspaceHistorySnapshot {
+            can_undo: !self.undo.is_empty(),
+            can_redo: !self.redo.is_empty(),
+            undo_label: self.undo.back().map(|state| state.label.clone()),
+            redo_label: self.redo.last().map(|state| state.label.clone()),
+        }
+    }
+
+    fn record(&mut self, label: &str, impact: WorkspaceEditImpact, previous: Timeline) {
+        if self.undo.len() == MAX_HISTORY_ENTRIES {
+            self.undo.pop_front();
+        }
+        self.undo.push_back(HistoryState {
+            label: label.to_owned(),
+            timeline: previous,
+            revision: self.current_revision,
+            impact,
+        });
+        self.current_revision = self.next_revision;
+        self.next_revision = self.next_revision.saturating_add(1);
+        self.redo.clear();
+        self.last_impact = Some(impact);
+    }
+
+    fn undo(&mut self, timeline: &mut Timeline) -> Result<(), CoreError> {
+        let previous = self
+            .undo
+            .pop_back()
+            .ok_or_else(|| CoreError::new("nothing to undo"))?;
+        let current = std::mem::replace(timeline, previous.timeline);
+        self.redo.push(HistoryState {
+            label: previous.label,
+            timeline: current,
+            revision: self.current_revision,
+            impact: previous.impact,
+        });
+        self.current_revision = previous.revision;
+        self.last_impact = Some(previous.impact);
+        Ok(())
+    }
+
+    fn redo(&mut self, timeline: &mut Timeline) -> Result<(), CoreError> {
+        let next = self
+            .redo
+            .pop()
+            .ok_or_else(|| CoreError::new("nothing to redo"))?;
+        if self.undo.len() == MAX_HISTORY_ENTRIES {
+            self.undo.pop_front();
+        }
+        let current = std::mem::replace(timeline, next.timeline);
+        self.undo.push_back(HistoryState {
+            label: next.label,
+            timeline: current,
+            revision: self.current_revision,
+            impact: next.impact,
+        });
+        self.current_revision = next.revision;
+        self.last_impact = Some(next.impact);
+        Ok(())
+    }
+
+    fn mark_saved(&mut self) {
+        self.saved_revision = self.current_revision;
+    }
+
+    fn clear(&mut self) {
+        self.undo.clear();
+        self.redo.clear();
+        self.last_impact = None;
+    }
+
+    fn references_source(&self, path: &Path) -> bool {
+        self.undo
+            .iter()
+            .chain(&self.redo)
+            .any(|state| state.timeline.source_is_referenced(path))
+    }
+
+    fn move_source_paths(&mut self, source: &Path, destination: &Path) -> bool {
+        let mut changed = false;
+        for state in self.undo.iter_mut().chain(&mut self.redo) {
+            changed |= state.timeline.move_source_paths(source, destination);
+        }
+        changed
+    }
+
+    fn is_dirty(&self) -> bool {
+        self.current_revision != self.saved_revision
     }
 }
 
@@ -115,6 +275,55 @@ impl Workspaces {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
+    }
+
+    fn edit_timeline(
+        &mut self,
+        label: &str,
+        impact: WorkspaceEditImpact,
+        edit: impl FnOnce(&mut Timeline) -> Result<(), CoreError>,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.history.last_impact = None;
+        let previous = self.active.timeline.clone();
+        if let Err(error) = edit(&mut self.active.timeline) {
+            self.active.timeline = previous;
+            return Err(error);
+        }
+        if self.active.timeline != previous {
+            self.active.history.record(label, impact, previous);
+            self.active.refresh_dirty();
+        }
+        self.snapshot()
+    }
+
+    /// Reverts the latest project edit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no edit to undo.
+    pub fn undo(&mut self) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.history.undo(&mut self.active.timeline)?;
+        self.active.refresh_dirty();
+        self.snapshot()
+    }
+
+    /// Reapplies the latest reverted project edit.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if there is no edit to redo.
+    pub fn redo(&mut self) -> Result<WorkspaceSnapshot, CoreError> {
+        self.active.history.redo(&mut self.active.timeline)?;
+        self.active.refresh_dirty();
+        self.snapshot()
+    }
+
+    #[must_use]
+    pub fn latest_history_impact(&self) -> WorkspaceEditImpact {
+        self.active
+            .history
+            .last_impact
+            .unwrap_or(WorkspaceEditImpact::None)
     }
 
     /// Replaces the active session with a new unsaved project.
@@ -158,6 +367,7 @@ impl Workspaces {
             project_file_path: self.active.project_file_path.clone(),
             files,
             timeline: self.active.timeline.snapshot(),
+            history: self.active.history.snapshot(),
             is_dirty: self.active.is_dirty,
         })
     }
@@ -180,6 +390,7 @@ impl Workspaces {
                         clip.source_path.as_deref().map(|source_path| {
                             self.resolve_audio_source(source_path)
                                 .map(|source_path| PlaybackClip {
+                                    id: clip.id.clone(),
                                     source_path,
                                     start_tick: clip.start_tick,
                                     duration_ticks: clip.duration_ticks,
@@ -194,7 +405,7 @@ impl Workspaces {
                     is_soloed: track.is_soloed,
                     gain_db: track.gain_db,
                     pan: track.pan,
-                    is_connected: track.is_connected,
+                    is_connected: self.active.timeline.track_routes_to_master(&track.id),
                     clips,
                 })
             })
@@ -269,13 +480,18 @@ impl Workspaces {
         }
         write_project(&project_file_path, &name, &self.active.timeline)?;
 
+        let timeline = self.active.timeline.clone();
+        let mut history = std::mem::take(&mut self.active.history);
+        history.mark_saved();
         self.active = Workspace {
             name,
             root_path: Some(root_path.to_owned()),
             project_file_path: Some(project_file_path),
             pending_imports: Vec::new(),
             virtual_directories: HashSet::new(),
-            timeline: self.active.timeline.clone(),
+            timeline,
+            history,
+            non_timeline_dirty: false,
             is_dirty: false,
         };
         self.snapshot()
@@ -294,7 +510,9 @@ impl Workspaces {
             .ok_or_else(|| CoreError::new("project has not been saved yet"))?;
 
         write_project(project_file_path, &self.active.name, &self.active.timeline)?;
-        self.active.is_dirty = false;
+        self.active.history.mark_saved();
+        self.active.non_timeline_dirty = false;
+        self.active.refresh_dirty();
         self.snapshot()
     }
 
@@ -343,6 +561,8 @@ impl Workspaces {
             pending_imports: Vec::new(),
             virtual_directories: HashSet::new(),
             timeline: document.timeline,
+            history: EditHistory::default(),
+            non_timeline_dirty: false,
             is_dirty: false,
         };
         self.snapshot()
@@ -425,7 +645,7 @@ impl Workspaces {
             }
         } else if !imports.is_empty() {
             self.active.pending_imports.extend(imports);
-            self.active.is_dirty = true;
+            self.active.mark_non_timeline_dirty();
         }
 
         self.snapshot()
@@ -472,7 +692,7 @@ impl Workspaces {
                 return Err(CoreError::new("workspace entry already exists"));
             }
             self.active.virtual_directories.insert(relative_path);
-            self.active.is_dirty = true;
+            self.active.mark_non_timeline_dirty();
         }
 
         self.snapshot()
@@ -488,6 +708,7 @@ impl Workspaces {
         relative_path: impl AsRef<Path>,
     ) -> Result<WorkspaceSnapshot, CoreError> {
         let relative_path = validate_entry_path(relative_path.as_ref())?;
+        let invalidates_history = self.active.history.references_source(&relative_path);
         if self.active.timeline.source_is_referenced(&relative_path) {
             return Err(CoreError::new(
                 "workspace entry is used by an audio clip and cannot be deleted",
@@ -523,7 +744,7 @@ impl Workspaces {
             self.active
                 .pending_imports
                 .retain(|pending| !pending.target_path.starts_with(&relative_path));
-            self.active.is_dirty = true;
+            self.active.mark_non_timeline_dirty();
         } else if let Some(index) = self
             .active
             .pending_imports
@@ -531,11 +752,14 @@ impl Workspaces {
             .position(|pending| pending.target_path == relative_path)
         {
             self.active.pending_imports.remove(index);
-            self.active.is_dirty = true;
+            self.active.mark_non_timeline_dirty();
         } else {
             return Err(CoreError::new("workspace entry does not exist"));
         }
 
+        if invalidates_history {
+            self.active.history.clear();
+        }
         self.snapshot()
     }
 
@@ -591,9 +815,13 @@ impl Workspaces {
             .active
             .timeline
             .move_source_paths(&source_path, &destination_path);
+        self.active
+            .history
+            .move_source_paths(&source_path, &destination_path);
         if self.active.root_path.is_none() || source_path_changed {
-            self.active.is_dirty = true;
+            self.active.non_timeline_dirty = true;
         }
+        self.active.refresh_dirty();
 
         self.snapshot()
     }
@@ -611,15 +839,20 @@ impl Workspaces {
         grid_division: GridDivision,
         is_snap_enabled: bool,
     ) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.set_settings(
-            bpm,
-            time_signature_numerator,
-            time_signature_denominator,
-            grid_division,
-            is_snap_enabled,
-        )?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        let impact = if self.active.timeline.bpm().to_bits() == bpm.to_bits() {
+            WorkspaceEditImpact::None
+        } else {
+            WorkspaceEditImpact::Timeline
+        };
+        self.edit_timeline("Change timeline settings", impact, |timeline| {
+            timeline.set_settings(
+                bpm,
+                time_signature_numerator,
+                time_signature_denominator,
+                grid_division,
+                is_snap_enabled,
+            )
+        })
     }
 
     /// Creates a timeline track or updates an existing one.
@@ -627,7 +860,6 @@ impl Workspaces {
     /// # Errors
     ///
     /// Returns an error if the track does not exist or its name is invalid.
-    #[allow(clippy::too_many_arguments)]
     pub fn save_timeline_track(
         &mut self,
         id: Option<&str>,
@@ -636,19 +868,20 @@ impl Workspaces {
         is_soloed: bool,
         gain_db: f64,
         pan: f64,
-        is_connected: bool,
     ) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.save_track(
-            id,
-            name,
-            is_muted,
-            is_soloed,
-            gain_db,
-            pan,
-            is_connected,
-        )?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        let label = if id.is_some() {
+            "Edit track"
+        } else {
+            "Add track"
+        };
+        let impact = if id.is_some() {
+            WorkspaceEditImpact::Mix
+        } else {
+            WorkspaceEditImpact::Timeline
+        };
+        self.edit_timeline(label, impact, |timeline| {
+            timeline.save_track(id, name, is_muted, is_soloed, gain_db, pan)
+        })
     }
 
     /// Deletes a timeline track and its clips.
@@ -657,9 +890,9 @@ impl Workspaces {
     ///
     /// Returns an error if the track does not exist.
     pub fn delete_timeline_track(&mut self, id: &str) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.delete_track(id)?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        self.edit_timeline("Delete track", WorkspaceEditImpact::Timeline, |timeline| {
+            timeline.delete_track(id)
+        })
     }
 
     /// Creates a timeline clip or updates and moves an existing one.
@@ -677,16 +910,21 @@ impl Workspaces {
         duration_ticks: u32,
         source_offset_ticks: u32,
     ) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.save_clip(
-            id,
-            track_id,
-            name,
-            start_tick,
-            duration_ticks,
-            source_offset_ticks,
-        )?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        let label = if id.is_some() {
+            "Edit clip"
+        } else {
+            "Add clip"
+        };
+        self.edit_timeline(label, WorkspaceEditImpact::Timeline, |timeline| {
+            timeline.save_clip(
+                id,
+                track_id,
+                name,
+                start_tick,
+                duration_ticks,
+                source_offset_ticks,
+            )
+        })
     }
 
     /// Deletes a timeline clip.
@@ -695,9 +933,9 @@ impl Workspaces {
     ///
     /// Returns an error if the clip does not exist.
     pub fn delete_timeline_clip(&mut self, id: &str) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.delete_clip(id)?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        self.edit_timeline("Delete clip", WorkspaceEditImpact::Timeline, |timeline| {
+            timeline.delete_clip(id)
+        })
     }
 
     /// Adds a decoded project audio source to a timeline track.
@@ -719,19 +957,23 @@ impl Workspaces {
         waveform: Vec<f32>,
     ) -> Result<WorkspaceSnapshot, CoreError> {
         self.resolve_audio_source(source_path)?;
-        self.active.timeline.add_audio_clip(
-            track_id,
-            source_path,
-            name,
-            start_tick,
-            duration_ticks,
-            sample_rate,
-            channels,
-            duration_seconds,
-            waveform,
-        )?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        self.edit_timeline(
+            "Add audio clip",
+            WorkspaceEditImpact::Timeline,
+            move |timeline| {
+                timeline.add_audio_clip(
+                    track_id,
+                    source_path,
+                    name,
+                    start_tick,
+                    duration_ticks,
+                    sample_rate,
+                    channels,
+                    duration_seconds,
+                    waveform,
+                )
+            },
+        )
     }
 
     /// Updates the master output mix.
@@ -744,9 +986,9 @@ impl Workspaces {
         gain_db: f64,
         is_muted: bool,
     ) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.set_master_mix(gain_db, is_muted)?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        self.edit_timeline("Change master mix", WorkspaceEditImpact::Mix, |timeline| {
+            timeline.set_master_mix(gain_db, is_muted)
+        })
     }
 
     /// Persists a channel or master node position.
@@ -760,9 +1002,57 @@ impl Workspaces {
         x: f64,
         y: f64,
     ) -> Result<WorkspaceSnapshot, CoreError> {
-        self.active.timeline.set_node_position(node_id, x, y)?;
-        self.active.is_dirty = true;
-        self.snapshot()
+        self.edit_timeline("Move mix node", WorkspaceEditImpact::None, |timeline| {
+            timeline.set_node_position(node_id, x, y)
+        })
+    }
+
+    /// Connects two compatible mix ports.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a node or port is missing, incompatible, or would create a cycle.
+    pub fn connect_mix_ports(
+        &mut self,
+        source_node_id: &str,
+        source_port_id: &str,
+        target_node_id: &str,
+        target_port_id: &str,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.edit_timeline("Connect mix ports", WorkspaceEditImpact::Mix, |timeline| {
+            timeline.connect_mix_ports(
+                source_node_id,
+                source_port_id,
+                target_node_id,
+                target_port_id,
+            )
+        })
+    }
+
+    /// Disconnects two mix ports.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the connection does not exist.
+    pub fn disconnect_mix_ports(
+        &mut self,
+        source_node_id: &str,
+        source_port_id: &str,
+        target_node_id: &str,
+        target_port_id: &str,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.edit_timeline(
+            "Disconnect mix ports",
+            WorkspaceEditImpact::Mix,
+            |timeline| {
+                timeline.disconnect_mix_ports(
+                    source_node_id,
+                    source_port_id,
+                    target_node_id,
+                    target_port_id,
+                )
+            },
+        )
     }
 }
 
@@ -1141,7 +1431,7 @@ mod tests {
     use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::{GridDivision, PROJECT_FILE_NAME, Workspaces};
+    use super::{GridDivision, PROJECT_FILE_NAME, WorkspaceEditImpact, Workspaces};
 
     #[test]
     fn starts_with_an_empty_unsaved_project_tree() {
@@ -1154,8 +1444,205 @@ mod tests {
         assert_eq!(snapshot.project_file_path, None);
         assert!(snapshot.files.is_empty());
         assert!((snapshot.timeline.bpm - 120.0).abs() < f64::EPSILON);
-        assert_eq!(snapshot.timeline.tracks.len(), 30);
+        assert_eq!(snapshot.timeline.tracks.len(), 10);
         assert!(!snapshot.is_dirty);
+    }
+
+    #[test]
+    fn compiles_explicit_mix_connections_into_playback_routes() {
+        let mut workspaces = Workspaces::new();
+        assert!(
+            workspaces
+                .playback_project()
+                .expect("playback project should build")
+                .tracks[0]
+                .is_connected
+        );
+
+        workspaces
+            .disconnect_mix_ports("track-1", "audio-out", "master", "audio-in")
+            .expect("route should disconnect");
+
+        assert!(
+            !workspaces
+                .playback_project()
+                .expect("playback project should rebuild")
+                .tracks[0]
+                .is_connected
+        );
+    }
+
+    #[test]
+    fn undoes_and_redoes_timeline_transactions_with_labels() {
+        let mut workspaces = Workspaces::new();
+        let edited = workspaces
+            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0)
+            .expect("track should save");
+        assert_eq!(edited.timeline.tracks.len(), 11);
+        assert!(edited.history.can_undo);
+        assert_eq!(edited.history.undo_label.as_deref(), Some("Add track"));
+        assert!(edited.is_dirty);
+
+        let undone = workspaces.undo().expect("track addition should undo");
+        assert_eq!(undone.timeline.tracks.len(), 10);
+        assert!(!undone.history.can_undo);
+        assert!(undone.history.can_redo);
+        assert_eq!(undone.history.redo_label.as_deref(), Some("Add track"));
+        assert!(!undone.is_dirty);
+
+        let redone = workspaces.redo().expect("track addition should redo");
+        assert_eq!(redone.timeline.tracks.len(), 11);
+        assert!(redone.history.can_undo);
+        assert!(!redone.history.can_redo);
+        assert!(redone.is_dirty);
+    }
+
+    #[test]
+    fn divergent_edits_clear_redo_history() {
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0)
+            .expect("track should save");
+        workspaces.undo().expect("track addition should undo");
+
+        let edited = workspaces
+            .save_timeline_track(Some("track-1"), "Kick", false, false, 0.0, 0.0)
+            .expect("track should rename");
+
+        assert!(!edited.history.can_redo);
+        assert_eq!(edited.history.undo_label.as_deref(), Some("Edit track"));
+    }
+
+    #[test]
+    fn new_projects_start_with_fresh_history() {
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0)
+            .expect("track should save");
+
+        let reset = workspaces.new_project().expect("project should reset");
+
+        assert!(!reset.history.can_undo);
+        assert!(!reset.history.can_redo);
+        assert!(!reset.is_dirty);
+    }
+
+    #[test]
+    fn save_marks_the_current_history_revision_clean() {
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("History Save");
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0)
+            .expect("track should save");
+        let saved = workspaces.save_as(&root).expect("project should save");
+        assert!(!saved.is_dirty);
+        assert!(saved.history.can_undo);
+
+        let undone = workspaces.undo().expect("saved edit should undo");
+        assert!(undone.is_dirty);
+        let redone = workspaces.redo().expect("saved edit should redo");
+        assert!(!redone.is_dirty);
+    }
+
+    #[test]
+    fn file_deletion_clears_history_that_could_restore_a_source_reference() {
+        let source_directory = tempdir().expect("source directory should be created");
+        let source = source_directory.path().join("sample.wav");
+        fs::write(&source, []).expect("source should be created");
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .import_audio_files([source], "")
+            .expect("source should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "sample.wav",
+                0,
+                "Sample",
+                960,
+                48_000,
+                2,
+                0.5,
+                Vec::new(),
+            )
+            .expect("clip should be added");
+        workspaces
+            .delete_timeline_clip("clip-1")
+            .expect("clip should be deleted");
+
+        let snapshot = workspaces
+            .delete_entry("sample.wav")
+            .expect("unreferenced source should be deleted");
+
+        assert!(!snapshot.history.can_undo);
+        assert!(!snapshot.history.can_redo);
+    }
+
+    #[test]
+    fn file_moves_rewrite_source_paths_in_history() {
+        let source_directory = tempdir().expect("source directory should be created");
+        let source = source_directory.path().join("sample.wav");
+        fs::write(&source, []).expect("source should be created");
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .import_audio_files([source], "")
+            .expect("source should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "sample.wav",
+                0,
+                "Sample",
+                960,
+                48_000,
+                2,
+                0.5,
+                Vec::new(),
+            )
+            .expect("clip should be added");
+        workspaces
+            .delete_timeline_clip("clip-1")
+            .expect("clip should be deleted");
+
+        let moved = workspaces
+            .move_entry("sample.wav", "renamed.wav")
+            .expect("source should move");
+        assert!(moved.history.can_undo);
+        let restored = workspaces.undo().expect("clip deletion should undo");
+
+        assert_eq!(
+            restored.timeline.tracks[0].clips[0].source_path.as_deref(),
+            Some("renamed.wav")
+        );
+    }
+
+    #[test]
+    fn history_reports_the_audio_impact_of_undo() {
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .set_master_mix(-3.0, false)
+            .expect("master mix should update");
+        workspaces.undo().expect("master mix should undo");
+        assert_eq!(workspaces.latest_history_impact(), WorkspaceEditImpact::Mix);
+
+        workspaces
+            .save_timeline_clip(None, "track-1", "Region", 0, 960, 0)
+            .expect("clip should save");
+        workspaces.undo().expect("clip should undo");
+        assert_eq!(
+            workspaces.latest_history_impact(),
+            WorkspaceEditImpact::Timeline
+        );
+
+        workspaces
+            .set_timeline_settings(120.0, 4, 4, GridDivision::Eighth, true)
+            .expect("grid should update");
+        workspaces.undo().expect("grid should undo");
+        assert_eq!(
+            workspaces.latest_history_impact(),
+            WorkspaceEditImpact::None
+        );
     }
 
     #[test]
@@ -1178,7 +1665,7 @@ mod tests {
             &fs::read_to_string(project_file).expect("project file should be readable"),
         )
         .expect("project should contain JSON");
-        assert_eq!(project["formatVersion"], 3);
+        assert_eq!(project["formatVersion"], 4);
         assert_eq!(project["name"], "First Beat");
         assert_eq!(project["timeline"]["bpm"], 120.0);
     }
@@ -1205,7 +1692,7 @@ mod tests {
     fn rejects_an_unsupported_project_version_without_replacing_the_session() {
         let parent = tempdir().expect("temporary directory should be created");
         let project_file = parent.path().join(PROJECT_FILE_NAME);
-        fs::write(&project_file, r#"{"formatVersion":4,"name":"Future"}"#)
+        fs::write(&project_file, r#"{"formatVersion":5,"name":"Future"}"#)
             .expect("project should be created");
         let mut workspaces = Workspaces::new();
 
@@ -1215,7 +1702,7 @@ mod tests {
 
         assert_eq!(
             error.to_string(),
-            "unsupported project format version 4; expected 1 through 3"
+            "unsupported project format version 5; expected 1 through 4"
         );
         assert_eq!(
             workspaces.snapshot().expect("snapshot should succeed").name,
@@ -1237,7 +1724,7 @@ mod tests {
 
         assert_eq!(snapshot.name, "Legacy");
         assert!((snapshot.timeline.bpm - 120.0).abs() < f64::EPSILON);
-        assert_eq!(snapshot.timeline.tracks.len(), 30);
+        assert_eq!(snapshot.timeline.tracks.len(), 10);
     }
 
     #[test]
@@ -1304,12 +1791,108 @@ mod tests {
             .open(project_file)
             .expect("version two project should migrate");
 
-        assert!(snapshot.timeline.tracks[0].node_x.abs() < f64::EPSILON);
-        assert!(snapshot.timeline.tracks[0].node_y.abs() < f64::EPSILON);
-        assert!((snapshot.timeline.tracks[1].node_x - 280.0).abs() < f64::EPSILON);
-        assert!(snapshot.timeline.tracks[1].node_y.abs() < f64::EPSILON);
-        assert!((snapshot.timeline.master_node_x - 1_600.0).abs() < f64::EPSILON);
-        assert!((snapshot.timeline.master_node_y - 420.0).abs() < f64::EPSILON);
+        let first = snapshot
+            .timeline
+            .mix_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "track-1")
+            .expect("first channel should exist");
+        let second = snapshot
+            .timeline
+            .mix_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "track-2")
+            .expect("second channel should exist");
+        let master = snapshot
+            .timeline
+            .mix_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "master")
+            .expect("master should exist");
+        assert!(first.x.abs() < f64::EPSILON);
+        assert!(first.y.abs() < f64::EPSILON);
+        assert!((second.x - 260.0).abs() < f64::EPSILON);
+        assert!(second.y.abs() < f64::EPSILON);
+        assert!((master.x - 820.0).abs() < f64::EPSILON);
+        assert!((master.y - 352.0).abs() < f64::EPSILON);
+        assert_eq!(snapshot.timeline.mix_graph.connections.len(), 2);
+    }
+
+    #[test]
+    fn migrates_version_three_routes_and_positions_to_an_explicit_graph() {
+        let parent = tempdir().expect("temporary directory should be created");
+        let project_file = parent.path().join(PROJECT_FILE_NAME);
+        fs::write(
+            &project_file,
+            r#"{
+                "formatVersion": 3,
+                "name": "Legacy routing",
+                "timeline": {
+                    "bpm": 120.0,
+                    "timeSignatureNumerator": 4,
+                    "timeSignatureDenominator": 4,
+                    "gridDivision": "quarter",
+                    "isSnapEnabled": true,
+                    "masterGainDb": 0.0,
+                    "isMasterMuted": false,
+                    "masterNodeX": 900.0,
+                    "masterNodeY": 300.0,
+                    "tracks": [{
+                        "id":"track-1",
+                        "name":"One",
+                        "isMuted":false,
+                        "isSoloed":false,
+                        "gainDb":0.0,
+                        "pan":0.0,
+                        "isConnected":false,
+                        "nodeX":40.0,
+                        "nodeY":80.0,
+                        "clips":[]
+                    }],
+                    "nextTrackId": 2,
+                    "nextClipId": 1
+                }
+            }"#,
+        )
+        .expect("project should be created");
+        let mut workspaces = Workspaces::new();
+
+        let snapshot = workspaces
+            .open(&project_file)
+            .expect("version three project should migrate");
+
+        let channel = snapshot
+            .timeline
+            .mix_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "track-1")
+            .expect("channel should migrate");
+        let master = snapshot
+            .timeline
+            .mix_graph
+            .nodes
+            .iter()
+            .find(|node| node.id == "master")
+            .expect("master should migrate");
+        assert!((channel.x - 40.0).abs() < f64::EPSILON);
+        assert!((channel.y - 80.0).abs() < f64::EPSILON);
+        assert!((master.x - 900.0).abs() < f64::EPSILON);
+        assert!((master.y - 300.0).abs() < f64::EPSILON);
+        assert!(snapshot.timeline.mix_graph.connections.is_empty());
+
+        workspaces.save().expect("migrated project should save");
+        let saved: Value = serde_json::from_str(
+            &fs::read_to_string(project_file).expect("project should be readable"),
+        )
+        .expect("project should contain JSON");
+        assert_eq!(saved["formatVersion"], 4);
+        assert!(saved["timeline"].get("masterNodeX").is_none());
+        assert!(saved["timeline"]["tracks"][0].get("isConnected").is_none());
+        assert!(saved["timeline"]["mixGraph"].is_object());
     }
 
     #[test]
@@ -1321,10 +1904,10 @@ mod tests {
             .set_timeline_settings(128.0, 3, 4, GridDivision::Eighth, true)
             .expect("settings should update");
         workspaces
-            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0, true)
+            .save_timeline_track(None, "Drums", false, false, 0.0, 0.0)
             .expect("track should save");
         workspaces
-            .save_timeline_clip(None, "track-31", "Pattern", 960, 1_920, 0)
+            .save_timeline_clip(None, "track-11", "Pattern", 960, 1_920, 0)
             .expect("clip should save");
         let saved = workspaces.save_as(&root).expect("project should save");
 
@@ -1336,9 +1919,9 @@ mod tests {
         assert!((snapshot.timeline.bpm - 128.0).abs() < f64::EPSILON);
         assert_eq!(snapshot.timeline.time_signature_numerator, 3);
         assert_eq!(snapshot.timeline.grid_division, GridDivision::Eighth);
-        assert_eq!(snapshot.timeline.tracks[30].name, "Drums");
-        assert_eq!(snapshot.timeline.tracks[30].clips[0].start_tick, 960);
-        assert_eq!(snapshot.timeline.tracks[30].clips[0].duration_ticks, 1_920);
+        assert_eq!(snapshot.timeline.tracks[10].name, "Drums");
+        assert_eq!(snapshot.timeline.tracks[10].clips[0].start_tick, 960);
+        assert_eq!(snapshot.timeline.tracks[10].clips[0].duration_ticks, 1_920);
         assert!(!snapshot.is_dirty);
     }
 
@@ -1501,10 +2084,19 @@ mod tests {
                 48_000,
                 2,
                 1.0,
-                Vec::new(),
+                vec![0.25, 0.75],
             )
             .expect("audio clip should be added");
         workspaces.save().expect("project should save");
+        let mut reopened = Workspaces::new();
+        let reopened_snapshot = reopened
+            .open(root.join(PROJECT_FILE_NAME))
+            .expect("project should reopen");
+        assert_eq!(
+            reopened_snapshot.timeline.tracks[0].clips[0].waveform,
+            [0.25, 0.75]
+        );
+        workspaces = reopened;
 
         let moved = workspaces
             .move_entry("Kick.wav", "Renamed.wav")

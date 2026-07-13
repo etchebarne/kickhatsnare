@@ -1,4 +1,4 @@
-use std::{fs::File, path::Path, time::Duration};
+use std::{fs::File, path::Path};
 
 use rodio::{Decoder, Source};
 
@@ -6,10 +6,8 @@ use crate::CoreError;
 
 #[derive(Debug, Clone)]
 pub struct DecodedAudio {
-    pub samples: Vec<f32>,
     pub channels: u16,
     pub sample_rate: u32,
-    pub frame_count: usize,
     pub duration_seconds: f64,
     pub waveform: Vec<f32>,
 }
@@ -21,7 +19,7 @@ pub fn decode(path: &Path) -> Result<DecodedAudio, CoreError> {
             path.display()
         ))
     })?;
-    let decoder = Decoder::try_from(file).map_err(|error| {
+    let mut decoder = Decoder::try_from(file).map_err(|error| {
         CoreError::new(format!(
             "failed to decode audio file {}: {error}",
             path.display()
@@ -35,56 +33,52 @@ pub fn decode(path: &Path) -> Result<DecodedAudio, CoreError> {
             path.display()
         )));
     }
-    let samples = decoder.collect::<Vec<_>>();
-    let frame_count = samples.len() / usize::from(channels);
-    if frame_count == 0 || sample_rate == 0 {
+    let duration = decoder.total_duration().ok_or_else(|| {
+        CoreError::new(format!(
+            "audio file duration is unavailable: {}",
+            path.display()
+        ))
+    })?;
+    if duration.is_zero() || sample_rate == 0 {
         return Err(CoreError::new(format!(
             "audio file is empty: {}",
             path.display()
         )));
     }
-    let frames = u64::try_from(frame_count)
-        .map_err(|_| CoreError::new("audio file is too large to decode"))?;
-    let sample_rate_u64 = u64::from(sample_rate);
-    let duration_seconds = Duration::from_secs(frames / sample_rate_u64).as_secs_f64()
-        + f64::from(
-            u32::try_from(frames % sample_rate_u64)
-                .expect("frame remainder is smaller than the sample rate"),
-        ) / f64::from(sample_rate);
-    let waveform = waveform(&samples, usize::from(channels), 256);
+    let waveform = sample_waveform(&mut decoder, duration, channels);
     Ok(DecodedAudio {
-        samples,
         channels,
         sample_rate,
-        frame_count,
-        duration_seconds,
+        duration_seconds: duration.as_secs_f64(),
         waveform,
     })
 }
 
-fn waveform(samples: &[f32], channels: usize, bucket_count: usize) -> Vec<f32> {
-    let frames = samples.len() / channels;
-    let bucket_count = bucket_count.min(frames).max(1);
-    (0..bucket_count)
-        .map(|bucket| {
-            let start = bucket * frames / bucket_count;
-            let end = ((bucket + 1) * frames / bucket_count).max(start + 1);
-            samples[start * channels..end * channels]
-                .iter()
-                .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
-                .min(1.0)
-        })
-        .collect()
-}
+fn sample_waveform(
+    decoder: &mut Decoder<std::io::BufReader<File>>,
+    duration: std::time::Duration,
+    channels: u16,
+) -> Vec<f32> {
+    const BUCKET_COUNT: u32 = 128;
+    const FRAMES_PER_BUCKET: u32 = 64;
 
-#[cfg(test)]
-mod tests {
-    use super::waveform;
-
-    #[test]
-    fn builds_bounded_peak_buckets() {
-        let peaks = waveform(&[0.1, -0.5, 0.25, 0.8, -1.2, 0.2, 0.4, 0.3], 2, 2);
-
-        assert_eq!(peaks, [0.8, 1.0]);
+    let mut waveform = Vec::with_capacity(
+        usize::try_from(BUCKET_COUNT).expect("waveform bucket count fits in usize"),
+    );
+    for bucket in 0..BUCKET_COUNT {
+        if bucket > 0 {
+            let position = duration.mul_f64(f64::from(bucket) / f64::from(BUCKET_COUNT));
+            if decoder.try_seek(position).is_err() {
+                break;
+            }
+        }
+        let sample_count = FRAMES_PER_BUCKET.saturating_mul(u32::from(channels));
+        let peak = decoder
+            .by_ref()
+            .take(usize::try_from(sample_count).expect("waveform sample count fits in usize"))
+            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
+            .min(1.0);
+        waveform.push(peak);
     }
+    waveform
 }

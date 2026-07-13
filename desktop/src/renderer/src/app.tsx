@@ -21,8 +21,10 @@ export function App() {
   const connect = useAppStore((state) => state.connect);
   const newProject = useAppStore((state) => state.newProject);
   const openProject = useAppStore((state) => state.openProject);
+  const redo = useAppStore((state) => state.redo);
   const saveProject = useAppStore((state) => state.saveProject);
   const saveProjectAs = useAppStore((state) => state.saveProjectAs);
+  const undo = useAppStore((state) => state.undo);
 
   useEffect(() => {
     void connect();
@@ -48,12 +50,30 @@ export function App() {
           event.preventDefault();
           void (event.shiftKey ? saveProjectAs() : saveProject());
           break;
+        case "y":
+          if (isEditable(event.target)) return;
+          if (!workspace?.history.canRedo) return;
+          event.preventDefault();
+          void redo();
+          break;
+        case "z":
+          if (isEditable(event.target)) return;
+          if (event.shiftKey) {
+            if (!workspace?.history.canRedo) return;
+            event.preventDefault();
+            void redo();
+          } else {
+            if (!workspace?.history.canUndo) return;
+            event.preventDefault();
+            void undo();
+          }
+          break;
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [newProject, openProject, saveProject, saveProjectAs, serverStatus, workspace]);
+  }, [newProject, openProject, redo, saveProject, saveProjectAs, serverStatus, undo, workspace]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
@@ -107,5 +127,12 @@ export function App() {
         </SidebarInset>
       </SidebarProvider>
     </div>
+  );
+}
+
+function isEditable(target: EventTarget | null) {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
   );
 }

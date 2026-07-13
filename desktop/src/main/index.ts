@@ -144,6 +144,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.workspaceAddAudioClip, (_event, params) =>
     getCoreServer().addAudioClip(params),
   );
+  ipcMain.handle(ipcChannels.workspaceConnectMixPorts, (_event, params) =>
+    getCoreServer().connectMixPorts(params),
+  );
   ipcMain.handle(ipcChannels.workspaceDeleteEntry, (_event, path: string) =>
     getCoreServer().deleteWorkspaceEntry(path),
   );
@@ -152,6 +155,9 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle(ipcChannels.workspaceDeleteTimelineTrack, (_event, params) =>
     getCoreServer().deleteTimelineTrack(params),
+  );
+  ipcMain.handle(ipcChannels.workspaceDisconnectMixPorts, (_event, params) =>
+    getCoreServer().disconnectMixPorts(params),
   );
   ipcMain.handle(ipcChannels.workspaceGet, () => getCoreServer().getWorkspace());
   ipcMain.handle(ipcChannels.workspaceImportAudio, (_event, payload: unknown) =>
@@ -164,6 +170,7 @@ app.whenReady().then(async () => {
   );
   ipcMain.handle(ipcChannels.workspaceNew, () => getCoreServer().newWorkspace());
   ipcMain.handle(ipcChannels.workspaceOpen, openProject);
+  ipcMain.handle(ipcChannels.workspaceRedo, () => getCoreServer().redoWorkspace());
   ipcMain.handle(ipcChannels.workspaceSave, saveProject);
   ipcMain.handle(ipcChannels.workspaceSaveAs, saveProjectAs);
   ipcMain.handle(ipcChannels.workspaceSaveTimelineClip, (_event, params) =>
@@ -181,6 +188,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.workspaceSetMixNodePosition, (_event, params) =>
     getCoreServer().setMixNodePosition(params),
   );
+  ipcMain.handle(ipcChannels.workspaceUndo, () => getCoreServer().undoWorkspace());
   ipcMain.handle(ipcChannels.windowMinimize, (event) => windowForEvent(event)?.minimize());
   ipcMain.handle(ipcChannels.windowToggleMaximize, (event) => {
     const window = windowForEvent(event);
@@ -209,14 +217,17 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.libraryUnpinFolder);
   ipcMain.removeHandler(ipcChannels.workspaceCreateDirectory);
   ipcMain.removeHandler(ipcChannels.workspaceAddAudioClip);
+  ipcMain.removeHandler(ipcChannels.workspaceConnectMixPorts);
   ipcMain.removeHandler(ipcChannels.workspaceDeleteEntry);
   ipcMain.removeHandler(ipcChannels.workspaceDeleteTimelineClip);
   ipcMain.removeHandler(ipcChannels.workspaceDeleteTimelineTrack);
+  ipcMain.removeHandler(ipcChannels.workspaceDisconnectMixPorts);
   ipcMain.removeHandler(ipcChannels.workspaceGet);
   ipcMain.removeHandler(ipcChannels.workspaceImportAudio);
   ipcMain.removeHandler(ipcChannels.workspaceMoveEntry);
   ipcMain.removeHandler(ipcChannels.workspaceNew);
   ipcMain.removeHandler(ipcChannels.workspaceOpen);
+  ipcMain.removeHandler(ipcChannels.workspaceRedo);
   ipcMain.removeHandler(ipcChannels.workspaceSave);
   ipcMain.removeHandler(ipcChannels.workspaceSaveAs);
   ipcMain.removeHandler(ipcChannels.workspaceSaveTimelineClip);
@@ -224,6 +235,7 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.workspaceSetTimelineSettings);
   ipcMain.removeHandler(ipcChannels.workspaceSetMasterMix);
   ipcMain.removeHandler(ipcChannels.workspaceSetMixNodePosition);
+  ipcMain.removeHandler(ipcChannels.workspaceUndo);
   ipcMain.removeHandler(ipcChannels.windowMinimize);
   ipcMain.removeHandler(ipcChannels.windowToggleMaximize);
   ipcMain.removeHandler(ipcChannels.windowClose);

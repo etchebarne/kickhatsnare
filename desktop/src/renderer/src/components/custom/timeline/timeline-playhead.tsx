@@ -44,16 +44,3 @@ export function TimelinePlayhead({ leftOffset, pixelsPerTick }: TimelinePlayhead
     </div>
   );
 }
-
-export function TransportPosition() {
-  const transport = useTransportStore((state) => state.transport);
-  const timeline = useAppStore((state) => state.workspace?.timeline ?? null);
-  if (!timeline) return null;
-  const ticksPerBeat = (timeline.ticksPerQuarter * 4) / timeline.timeSignatureDenominator;
-  const ticksPerBar = ticksPerBeat * timeline.timeSignatureNumerator;
-  const bar = Math.floor(transport.positionTick / ticksPerBar) + 1;
-  const withinBar = transport.positionTick % ticksPerBar;
-  const beat = Math.floor(withinBar / ticksPerBeat) + 1;
-  const tick = Math.round(withinBar % ticksPerBeat);
-  return <span>{`${bar}.${beat}.${String(tick).padStart(3, "0")}`}</span>;
-}

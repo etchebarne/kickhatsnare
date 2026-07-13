@@ -1,14 +1,15 @@
 mod decoder;
 mod renderer;
 
-use std::{collections::HashMap, fmt, path::Path, sync::Arc};
+use std::{fmt, path::Path, sync::Arc};
 
+use crossbeam_queue::ArrayQueue;
 use rodio::{OutputStream, OutputStreamBuilder};
 
 pub use decoder::DecodedAudio;
 use renderer::{
-    NO_SEEK, PlaybackState, RenderPlan, TimelineSource, TransportControl, frame_to_tick,
-    seconds_to_ticks, tick_to_frame,
+    AudioStreams, NO_SEEK, PlaybackState, PreparedRenderState, RENDER_PLAN_UPDATE_CAPACITY,
+    RenderPlan, TimelineSource, TransportControl, frame_to_tick, seconds_to_ticks, tick_to_frame,
 };
 
 use crate::{
@@ -42,6 +43,8 @@ struct PlaybackSession {
     _stream: OutputStream,
     plan: Arc<RenderPlan>,
     transport: Arc<TransportControl>,
+    streams: AudioStreams,
+    updates: Arc<ArrayQueue<PreparedRenderState>>,
 }
 
 impl fmt::Debug for Audio {
@@ -94,18 +97,7 @@ impl Audio {
             .map_err(|error| CoreError::new(format!("failed to open audio output: {error}")))?;
         stream.log_on_drop(false);
         let sample_rate = stream.config().sample_rate();
-        let mut decoded = HashMap::new();
-        for path in project
-            .tracks
-            .iter()
-            .flat_map(|track| &track.clips)
-            .map(|clip| &clip.source_path)
-        {
-            if !decoded.contains_key(path) {
-                decoded.insert(path.clone(), Arc::new(decoder::decode(path)?));
-            }
-        }
-        let plan = Arc::new(RenderPlan::build(project, sample_rate, &decoded));
+        let plan = Arc::new(RenderPlan::build(project, sample_rate));
         let start_frame = tick_to_frame(
             self.stopped_position_tick,
             plan.bpm,
@@ -118,14 +110,19 @@ impl Audio {
             frame: std::sync::atomic::AtomicU64::new(start_frame),
             requested_seek: std::sync::atomic::AtomicU64::new(NO_SEEK),
         });
-        stream.mixer().add(TimelineSource::new(
-            Arc::clone(&plan),
-            Arc::clone(&transport),
-        ));
+        let mut streams = AudioStreams::default();
+        let mut state =
+            PreparedRenderState::new(Arc::clone(&plan), &mut streams, true, false, false)?;
+        state.prewarm(start_frame);
+        let updates = Arc::new(ArrayQueue::new(RENDER_PLAN_UPDATE_CAPACITY));
+        let source = TimelineSource::new(state, Arc::clone(&transport), Arc::clone(&updates))?;
+        stream.mixer().add(source);
         self.session = Some(PlaybackSession {
             _stream: stream,
             plan,
             transport,
+            streams,
+            updates,
         });
         self.last_error = None;
         Ok(self.transport())
@@ -236,13 +233,67 @@ impl Audio {
                 track.pan,
                 track.is_muted,
                 track.is_soloed,
-                track.is_connected,
+                timeline.mix_graph.track_routes_to_master(&track.id),
             );
         }
         session
             .plan
             .master
             .update(timeline.master_gain_db, timeline.is_master_muted);
+    }
+
+    /// Rebuilds the active render plan without changing transport state or position.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a newly referenced source cannot be opened.
+    pub fn refresh_timeline(
+        &mut self,
+        project: &PlaybackProject,
+        resume_if_at_end: bool,
+    ) -> Result<TransportSnapshot, CoreError> {
+        let Some(session) = &mut self.session else {
+            return Ok(self.transport());
+        };
+        let current_frame = session
+            .transport
+            .frame
+            .load(std::sync::atomic::Ordering::Acquire);
+        let mut next_plan = RenderPlan::build(project, session.plan.sample_rate);
+        next_plan.mark_changed_clips(&session.plan);
+        let plan = Arc::new(next_plan);
+        let remap_position = session.plan.bpm.to_bits() != plan.bpm.to_bits()
+            || session.plan.ticks_per_quarter != plan.ticks_per_quarter;
+        let prewarm_frame = if remap_position {
+            tick_to_frame(
+                frame_to_tick(
+                    current_frame,
+                    session.plan.bpm,
+                    session.plan.ticks_per_quarter,
+                    session.plan.sample_rate,
+                ),
+                plan.bpm,
+                plan.ticks_per_quarter,
+                plan.sample_rate,
+            )
+        } else {
+            current_frame
+        }
+        .min(plan.duration_frames);
+        let mut state = PreparedRenderState::new(
+            Arc::clone(&plan),
+            &mut session.streams,
+            false,
+            remap_position,
+            resume_if_at_end,
+        )?;
+        state.prewarm(prewarm_frame);
+        session
+            .updates
+            .push(state)
+            .map_err(|_| CoreError::new("audio render update queue is full"))?;
+        session.plan = plan;
+        Ok(self.transport())
     }
 
     #[must_use]

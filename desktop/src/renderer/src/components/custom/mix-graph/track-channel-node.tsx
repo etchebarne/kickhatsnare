@@ -6,7 +6,8 @@ import { useAppStore } from "@/stores/app-store";
 import type { WorkspaceSnapshot } from "@shared/ipc";
 
 type Track = WorkspaceSnapshot["timeline"]["tracks"][number];
-export type TrackChannelNodeType = Node<{ track: Track }, "trackChannel">;
+type MixNode = WorkspaceSnapshot["timeline"]["mixGraph"]["nodes"][number];
+export type TrackChannelNodeType = Node<{ track: Track; mixNode: MixNode }, "trackChannel">;
 
 export function TrackChannelNode({ data }: NodeProps<TrackChannelNodeType>) {
   const saveTrack = useAppStore((state) => state.saveTimelineTrack);
@@ -25,12 +26,13 @@ export function TrackChannelNode({ data }: NodeProps<TrackChannelNodeType>) {
       isSoloed: update.isSoloed ?? track.isSoloed,
       gainDb: update.gainDb ?? gain,
       pan: update.pan ?? pan,
-      isConnected: update.isConnected ?? track.isConnected,
     });
   }
 
+  const output = data.mixNode.ports.find((port) => port.direction === "output");
+
   return (
-    <article className="w-64 overflow-hidden rounded-md border border-border bg-card text-card-foreground shadow-xl">
+    <article className="w-56 overflow-hidden rounded-2xl border border-border/80 bg-card text-card-foreground shadow-lg">
       <header className="flex items-center justify-between border-b border-border px-3 py-2">
         <div className="min-w-0">
           <p className="truncate text-xs font-semibold">{data.track.name}</p>
@@ -79,17 +81,18 @@ export function TrackChannelNode({ data }: NodeProps<TrackChannelNodeType>) {
           onCommit={() => commit({ pan })}
         />
       </div>
-      {!data.track.isConnected ? (
-        <p className="border-t border-destructive/30 bg-destructive/10 px-3 py-1.5 text-[10px] text-destructive">
-          Unrouted
-        </p>
+      {output ? (
+        <div className="relative flex items-center justify-between border-t border-border px-3 py-2 font-mono text-[9px] uppercase tracking-[0.16em] text-muted-foreground">
+          <span>{output.label}</span>
+          <span>{output.signalType}</span>
+          <Handle
+            id={output.id}
+            type="source"
+            position={Position.Right}
+            className="!right-0 !size-3 !border-2 !border-card !bg-foreground shadow-sm"
+          />
+        </div>
       ) : null}
-      <Handle
-        id="audio-out"
-        type="source"
-        position={Position.Right}
-        className="!size-3 !border-2 !border-card !bg-foreground"
-      />
     </article>
   );
 }

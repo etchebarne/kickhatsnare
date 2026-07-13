@@ -8,6 +8,8 @@ export type SaveTimelineClipParams = ParamsFor<"workspace.saveTimelineClip">;
 export type SaveTimelineTrackParams = ParamsFor<"workspace.saveTimelineTrack">;
 export type SetTimelineSettingsParams = ParamsFor<"workspace.setTimelineSettings">;
 export type AddAudioClipParams = ParamsFor<"workspace.addAudioClip">;
+export type ConnectMixPortsParams = ParamsFor<"workspace.connectMixPorts">;
+export type DisconnectMixPortsParams = ParamsFor<"workspace.disconnectMixPorts">;
 export type SetMasterMixParams = ParamsFor<"workspace.setMasterMix">;
 export type SetMixNodePositionParams = ParamsFor<"workspace.setMixNodePosition">;
 export type TransportSnapshot = ResultFor<"audio.getTransport">;
@@ -24,14 +26,17 @@ export const ipcChannels = {
   ping: "core:ping",
   workspaceCreateDirectory: "workspace:create-directory",
   workspaceAddAudioClip: "workspace:add-audio-clip",
+  workspaceConnectMixPorts: "workspace:connect-mix-ports",
   workspaceDeleteEntry: "workspace:delete-entry",
   workspaceDeleteTimelineClip: "workspace:delete-timeline-clip",
   workspaceDeleteTimelineTrack: "workspace:delete-timeline-track",
+  workspaceDisconnectMixPorts: "workspace:disconnect-mix-ports",
   workspaceGet: "workspace:get",
   workspaceImportAudio: "workspace:import-audio",
   workspaceMoveEntry: "workspace:move-entry",
   workspaceNew: "workspace:new",
   workspaceOpen: "workspace:open",
+  workspaceRedo: "workspace:redo",
   workspaceSave: "workspace:save",
   workspaceSaveAs: "workspace:save-as",
   workspaceSaveTimelineClip: "workspace:save-timeline-clip",
@@ -39,6 +44,7 @@ export const ipcChannels = {
   workspaceSetTimelineSettings: "workspace:set-timeline-settings",
   workspaceSetMasterMix: "workspace:set-master-mix",
   workspaceSetMixNodePosition: "workspace:set-mix-node-position",
+  workspaceUndo: "workspace:undo",
   windowMinimize: "window:minimize",
   windowToggleMaximize: "window:toggle-maximize",
   windowClose: "window:close",
@@ -56,14 +62,17 @@ export interface KickHatSnareApi {
   unpinFolder(id: string): Promise<LibrarySnapshot>;
   createWorkspaceDirectory(path: string): Promise<WorkspaceSnapshot>;
   addAudioClip(params: AddAudioClipParams): Promise<WorkspaceSnapshot>;
+  connectMixPorts(params: ConnectMixPortsParams): Promise<WorkspaceSnapshot>;
   deleteWorkspaceEntry(path: string): Promise<WorkspaceSnapshot>;
   deleteTimelineClip(params: DeleteTimelineClipParams): Promise<WorkspaceSnapshot>;
   deleteTimelineTrack(params: DeleteTimelineTrackParams): Promise<WorkspaceSnapshot>;
+  disconnectMixPorts(params: DisconnectMixPortsParams): Promise<WorkspaceSnapshot>;
   getWorkspace(): Promise<WorkspaceSnapshot>;
   importAudioFiles(files: File[], targetDirectory: string): Promise<WorkspaceSnapshot>;
   moveWorkspaceEntry(sourcePath: string, destinationPath: string): Promise<WorkspaceSnapshot>;
   newProject(): Promise<WorkspaceSnapshot>;
   openProject(): Promise<WorkspaceSnapshot | null>;
+  redoWorkspace(): Promise<WorkspaceSnapshot>;
   saveProject(): Promise<WorkspaceSnapshot | null>;
   saveProjectAs(): Promise<WorkspaceSnapshot | null>;
   saveTimelineClip(params: SaveTimelineClipParams): Promise<WorkspaceSnapshot>;
@@ -71,6 +80,7 @@ export interface KickHatSnareApi {
   setTimelineSettings(params: SetTimelineSettingsParams): Promise<WorkspaceSnapshot>;
   setMasterMix(params: SetMasterMixParams): Promise<WorkspaceSnapshot>;
   setMixNodePosition(params: SetMixNodePositionParams): Promise<WorkspaceSnapshot>;
+  undoWorkspace(): Promise<WorkspaceSnapshot>;
   minimizeWindow(): Promise<void>;
   toggleMaximizeWindow(): Promise<void>;
   closeWindow(): Promise<void>;

@@ -1,13 +1,16 @@
 mod add_audio_clip;
+mod connect_mix_ports;
 mod create_directory;
 mod delete_entry;
 mod delete_timeline_clip;
 mod delete_timeline_track;
+mod disconnect_mix_ports;
 mod get;
 mod import_audio;
 mod move_entry;
 mod new;
 mod open;
+mod redo;
 mod save;
 mod save_as;
 mod save_timeline_clip;
@@ -15,15 +18,17 @@ mod save_timeline_track;
 mod set_master_mix;
 mod set_mix_node_position;
 mod set_timeline_settings;
+mod undo;
 
-use kickhatsnare_core::Core;
+use kickhatsnare_core::{Core, workspace::WorkspaceEditImpact};
 use kickhatsnare_protocol::{
     IpcMethod,
     workspace::{
-        AddAudioClip, CreateWorkspaceDirectory, DeleteTimelineClip, DeleteTimelineTrack,
-        DeleteWorkspaceEntry, GetWorkspace, ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace,
-        OpenWorkspace, SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs,
-        SetMasterMix, SetMixNodePosition, SetTimelineSettings,
+        AddAudioClip, ConnectMixPorts, CreateWorkspaceDirectory, DeleteTimelineClip,
+        DeleteTimelineTrack, DeleteWorkspaceEntry, DisconnectMixPorts, GetWorkspace,
+        ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace, OpenWorkspace, RedoWorkspace,
+        SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs, SetMasterMix,
+        SetMixNodePosition, SetTimelineSettings, UndoWorkspace,
     },
 };
 use serde_json::Value;
@@ -38,15 +43,18 @@ pub(super) fn dispatch(
 ) -> Result<Value, ApiError> {
     let result = match method {
         AddAudioClip::NAME => add_audio_clip::handle(params, core),
+        ConnectMixPorts::NAME => connect_mix_ports::handle(params, core.workspaces()),
         CreateWorkspaceDirectory::NAME => create_directory::handle(params, core.workspaces()),
         DeleteWorkspaceEntry::NAME => delete_entry::handle(params, core.workspaces()),
         DeleteTimelineClip::NAME => delete_timeline_clip::handle(params, core.workspaces()),
         DeleteTimelineTrack::NAME => delete_timeline_track::handle(params, core.workspaces()),
+        DisconnectMixPorts::NAME => disconnect_mix_ports::handle(params, core.workspaces()),
         GetWorkspace::NAME => get::handle(params, core.workspaces()),
         ImportWorkspaceAudio::NAME => import_audio::handle(params, core.workspaces()),
         MoveWorkspaceEntry::NAME => move_entry::handle(params, core.workspaces()),
         NewWorkspace::NAME => new::handle(params, core.workspaces()),
         OpenWorkspace::NAME => open::handle(params, core.workspaces()),
+        RedoWorkspace::NAME => redo::handle(params, core.workspaces()),
         SaveWorkspace::NAME => save::handle(params, core.workspaces()),
         SaveWorkspaceAs::NAME => save_as::handle(params, core.workspaces()),
         SaveTimelineClip::NAME => save_timeline_clip::handle(params, core.workspaces()),
@@ -54,20 +62,34 @@ pub(super) fn dispatch(
         SetMasterMix::NAME => set_master_mix::handle(params, core.workspaces()),
         SetMixNodePosition::NAME => set_mix_node_position::handle(params, core.workspaces()),
         SetTimelineSettings::NAME => set_timeline_settings::handle(params, core.workspaces()),
+        UndoWorkspace::NAME => undo::handle(params, core.workspaces()),
         _ => Err(ApiError::method_not_found("workspace", action)),
     };
     if result.is_ok() {
         match method {
-            SaveTimelineTrack::NAME | SetMasterMix::NAME => {
+            ConnectMixPorts::NAME | DisconnectMixPorts::NAME | SetMasterMix::NAME => {
                 core.sync_audio_mix().map_err(|error| core_error(&error))?;
             }
-            AddAudioClip::NAME
-            | DeleteTimelineClip::NAME
-            | DeleteTimelineTrack::NAME
-            | NewWorkspace::NAME
-            | OpenWorkspace::NAME
-            | SaveTimelineClip::NAME
-            | SetTimelineSettings::NAME => core.invalidate_audio(),
+            DeleteTimelineClip::NAME | DeleteTimelineTrack::NAME | SaveTimelineClip::NAME => {
+                core.refresh_audio_timeline()
+                    .map_err(|error| core_error(&error))?;
+            }
+            NewWorkspace::NAME | OpenWorkspace::NAME => {
+                core.invalidate_audio();
+            }
+            RedoWorkspace::NAME
+            | SaveTimelineTrack::NAME
+            | SetTimelineSettings::NAME
+            | UndoWorkspace::NAME => match core.workspaces().latest_history_impact() {
+                WorkspaceEditImpact::None => {}
+                WorkspaceEditImpact::Mix => {
+                    core.sync_audio_mix().map_err(|error| core_error(&error))?;
+                }
+                WorkspaceEditImpact::Timeline => {
+                    core.refresh_audio_timeline()
+                        .map_err(|error| core_error(&error))?;
+                }
+            },
             _ => {}
         }
     }
@@ -95,8 +117,46 @@ fn serialize_snapshot(
             is_snap_enabled: snapshot.timeline.is_snap_enabled,
             master_gain_db: snapshot.timeline.master_gain_db,
             is_master_muted: snapshot.timeline.is_master_muted,
-            master_node_x: snapshot.timeline.master_node_x,
-            master_node_y: snapshot.timeline.master_node_y,
+            mix_graph: kickhatsnare_protocol::workspace::MixGraph {
+                nodes: snapshot
+                    .timeline
+                    .mix_graph
+                    .nodes
+                    .into_iter()
+                    .map(|node| kickhatsnare_protocol::workspace::MixNode {
+                        id: node.id,
+                        kind: serialize_mix_node_kind(node.kind),
+                        track_id: node.track_id,
+                        x: node.x,
+                        y: node.y,
+                        ports: node
+                            .ports
+                            .into_iter()
+                            .map(|port| kickhatsnare_protocol::workspace::MixPort {
+                                id: port.id,
+                                label: port.label,
+                                direction: serialize_mix_port_direction(port.direction),
+                                signal_type: serialize_mix_signal_type(port.signal_type),
+                                allows_multiple_connections: port.allows_multiple_connections,
+                            })
+                            .collect(),
+                    })
+                    .collect(),
+                connections: snapshot
+                    .timeline
+                    .mix_graph
+                    .connections
+                    .into_iter()
+                    .map(
+                        |connection| kickhatsnare_protocol::workspace::MixConnection {
+                            source_node_id: connection.source_node_id,
+                            source_port_id: connection.source_port_id,
+                            target_node_id: connection.target_node_id,
+                            target_port_id: connection.target_port_id,
+                        },
+                    )
+                    .collect(),
+            },
             tracks: snapshot
                 .timeline
                 .tracks
@@ -108,9 +168,6 @@ fn serialize_snapshot(
                     is_soloed: track.is_soloed,
                     gain_db: track.gain_db,
                     pan: track.pan,
-                    is_connected: track.is_connected,
-                    node_x: track.node_x,
-                    node_y: track.node_y,
                     clips: track
                         .clips
                         .into_iter()
@@ -130,6 +187,7 @@ fn serialize_snapshot(
                 })
                 .collect(),
         },
+        history: serialize_history(snapshot.history),
         is_dirty: snapshot.is_dirty,
     };
 
@@ -139,6 +197,17 @@ fn serialize_snapshot(
             error.to_string(),
         )
     })
+}
+
+fn serialize_history(
+    history: kickhatsnare_core::workspace::WorkspaceHistorySnapshot,
+) -> kickhatsnare_protocol::workspace::WorkspaceHistorySnapshot {
+    kickhatsnare_protocol::workspace::WorkspaceHistorySnapshot {
+        can_undo: history.can_undo,
+        can_redo: history.can_redo,
+        undo_label: history.undo_label,
+        redo_label: history.redo_label,
+    }
 }
 
 fn deserialize_grid_division(
@@ -174,6 +243,42 @@ fn serialize_grid_division(
         Core::QuarterTriplet => kickhatsnare_protocol::workspace::GridDivision::QuarterTriplet,
         Core::EighthTriplet => kickhatsnare_protocol::workspace::GridDivision::EighthTriplet,
         Core::SixteenthTriplet => kickhatsnare_protocol::workspace::GridDivision::SixteenthTriplet,
+    }
+}
+
+fn serialize_mix_node_kind(
+    kind: kickhatsnare_core::workspace::MixNodeKind,
+) -> kickhatsnare_protocol::workspace::MixNodeKind {
+    match kind {
+        kickhatsnare_core::workspace::MixNodeKind::TrackChannel => {
+            kickhatsnare_protocol::workspace::MixNodeKind::TrackChannel
+        }
+        kickhatsnare_core::workspace::MixNodeKind::MasterOutput => {
+            kickhatsnare_protocol::workspace::MixNodeKind::MasterOutput
+        }
+    }
+}
+
+fn serialize_mix_port_direction(
+    direction: kickhatsnare_core::workspace::MixPortDirection,
+) -> kickhatsnare_protocol::workspace::MixPortDirection {
+    match direction {
+        kickhatsnare_core::workspace::MixPortDirection::Input => {
+            kickhatsnare_protocol::workspace::MixPortDirection::Input
+        }
+        kickhatsnare_core::workspace::MixPortDirection::Output => {
+            kickhatsnare_protocol::workspace::MixPortDirection::Output
+        }
+    }
+}
+
+fn serialize_mix_signal_type(
+    signal_type: kickhatsnare_core::workspace::MixSignalType,
+) -> kickhatsnare_protocol::workspace::MixSignalType {
+    match signal_type {
+        kickhatsnare_core::workspace::MixSignalType::Audio => {
+            kickhatsnare_protocol::workspace::MixSignalType::Audio
+        }
     }
 }
 

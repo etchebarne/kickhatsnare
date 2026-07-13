@@ -1,7 +1,7 @@
 use std::{fmt, path::Path};
 
 use crate::{
-    audio::{Audio, TransportSnapshot},
+    audio::{Audio, TransportSnapshot, TransportState},
     library::Library,
     system::System,
     workspace::{WorkspaceSnapshot, Workspaces},
@@ -96,6 +96,7 @@ impl Core {
         source_path: &str,
         start_tick: u32,
     ) -> Result<WorkspaceSnapshot, CoreError> {
+        let resume_if_at_end = self.audio.transport().state == TransportState::Playing;
         let path = self.workspaces.resolve_audio_source(source_path)?;
         let analysis = Audio::analyze(&path)?;
         let timeline = self.workspaces.snapshot()?.timeline;
@@ -119,7 +120,8 @@ impl Core {
             analysis.duration_seconds,
             analysis.waveform,
         )?;
-        self.audio.invalidate();
+        let project = self.workspaces.playback_project()?;
+        self.audio.refresh_timeline(&project, resume_if_at_end)?;
         Ok(snapshot)
     }
 
@@ -158,6 +160,18 @@ impl Core {
     pub fn sync_audio_mix(&mut self) -> Result<(), CoreError> {
         let timeline = self.workspaces.snapshot()?.timeline;
         self.audio.sync_mix(&timeline);
+        Ok(())
+    }
+
+    /// Applies timeline structure changes while preserving active transport state.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a newly referenced source cannot be opened.
+    pub fn refresh_audio_timeline(&mut self) -> Result<(), CoreError> {
+        let resume_if_at_end = self.audio.transport().state == TransportState::Playing;
+        let project = self.workspaces.playback_project()?;
+        self.audio.refresh_timeline(&project, resume_if_at_end)?;
         Ok(())
     }
 

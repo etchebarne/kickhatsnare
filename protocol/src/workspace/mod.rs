@@ -1,13 +1,16 @@
 mod add_audio_clip;
+mod connect_mix_ports;
 mod create_directory;
 mod delete_entry;
 mod delete_timeline_clip;
 mod delete_timeline_track;
+mod disconnect_mix_ports;
 mod get;
 mod import_audio;
 mod move_entry;
 mod new;
 mod open;
+mod redo;
 mod save;
 mod save_as;
 mod save_timeline_clip;
@@ -15,17 +18,21 @@ mod save_timeline_track;
 mod set_master_mix;
 mod set_mix_node_position;
 mod set_timeline_settings;
+mod undo;
 
 pub use add_audio_clip::{AddAudioClip, AddAudioClipParams};
+pub use connect_mix_ports::{ConnectMixPorts, ConnectMixPortsParams};
 pub use create_directory::{CreateWorkspaceDirectory, CreateWorkspaceDirectoryParams};
 pub use delete_entry::{DeleteWorkspaceEntry, DeleteWorkspaceEntryParams};
 pub use delete_timeline_clip::{DeleteTimelineClip, DeleteTimelineClipParams};
 pub use delete_timeline_track::{DeleteTimelineTrack, DeleteTimelineTrackParams};
+pub use disconnect_mix_ports::{DisconnectMixPorts, DisconnectMixPortsParams};
 pub use get::{GetWorkspace, GetWorkspaceParams};
 pub use import_audio::{ImportWorkspaceAudio, ImportWorkspaceAudioParams};
 pub use move_entry::{MoveWorkspaceEntry, MoveWorkspaceEntryParams};
 pub use new::{NewWorkspace, NewWorkspaceParams};
 pub use open::{OpenWorkspace, OpenWorkspaceParams};
+pub use redo::{RedoWorkspace, RedoWorkspaceParams};
 pub use save::{SaveWorkspace, SaveWorkspaceParams};
 pub use save_as::{SaveWorkspaceAs, SaveWorkspaceAsParams};
 pub use save_timeline_clip::{SaveTimelineClip, SaveTimelineClipParams};
@@ -33,6 +40,7 @@ pub use save_timeline_track::{SaveTimelineTrack, SaveTimelineTrackParams};
 pub use set_master_mix::{SetMasterMix, SetMasterMixParams};
 pub use set_mix_node_position::{SetMixNodePosition, SetMixNodePositionParams};
 pub use set_timeline_settings::{SetTimelineSettings, SetTimelineSettingsParams};
+pub use undo::{UndoWorkspace, UndoWorkspaceParams};
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -50,7 +58,19 @@ pub struct WorkspaceSnapshot {
     pub files: Vec<String>,
     #[ts(inline)]
     pub timeline: TimelineSnapshot,
+    #[ts(inline)]
+    pub history: WorkspaceHistorySnapshot,
     pub is_dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct WorkspaceHistorySnapshot {
+    pub can_undo: bool,
+    pub can_redo: bool,
+    pub undo_label: Option<String>,
+    pub redo_label: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]
@@ -66,8 +86,8 @@ pub struct TimelineSnapshot {
     pub is_snap_enabled: bool,
     pub master_gain_db: f64,
     pub is_master_muted: bool,
-    pub master_node_x: f64,
-    pub master_node_y: f64,
+    #[ts(inline)]
+    pub mix_graph: MixGraph,
     #[ts(inline)]
     pub tracks: Vec<TimelineTrack>,
 }
@@ -82,11 +102,78 @@ pub struct TimelineTrack {
     pub is_soloed: bool,
     pub gain_db: f64,
     pub pan: f64,
-    pub is_connected: bool,
-    pub node_x: f64,
-    pub node_y: f64,
     #[ts(inline)]
     pub clips: Vec<TimelineClip>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MixGraph {
+    #[ts(inline)]
+    pub nodes: Vec<MixNode>,
+    #[ts(inline)]
+    pub connections: Vec<MixConnection>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MixNode {
+    pub id: String,
+    #[ts(inline)]
+    pub kind: MixNodeKind,
+    pub track_id: Option<String>,
+    pub x: f64,
+    pub y: f64,
+    #[ts(inline)]
+    pub ports: Vec<MixPort>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MixPort {
+    pub id: String,
+    pub label: String,
+    #[ts(inline)]
+    pub direction: MixPortDirection,
+    #[ts(inline)]
+    pub signal_type: MixSignalType,
+    pub allows_multiple_connections: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MixConnection {
+    pub source_node_id: String,
+    pub source_port_id: String,
+    pub target_node_id: String,
+    pub target_port_id: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum MixNodeKind {
+    TrackChannel,
+    MasterOutput,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum MixPortDirection {
+    Input,
+    Output,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum MixSignalType {
+    Audio,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, JsonSchema, TS)]
@@ -123,15 +210,18 @@ pub enum GridDivision {
 pub(crate) fn methods() -> Vec<ContractMethod> {
     vec![
         describe::<AddAudioClip>(),
+        describe::<ConnectMixPorts>(),
         describe::<CreateWorkspaceDirectory>(),
         describe::<DeleteWorkspaceEntry>(),
         describe::<DeleteTimelineClip>(),
         describe::<DeleteTimelineTrack>(),
+        describe::<DisconnectMixPorts>(),
         describe::<GetWorkspace>(),
         describe::<ImportWorkspaceAudio>(),
         describe::<MoveWorkspaceEntry>(),
         describe::<NewWorkspace>(),
         describe::<OpenWorkspace>(),
+        describe::<RedoWorkspace>(),
         describe::<SaveWorkspace>(),
         describe::<SaveWorkspaceAs>(),
         describe::<SaveTimelineClip>(),
@@ -139,5 +229,6 @@ pub(crate) fn methods() -> Vec<ContractMethod> {
         describe::<SetTimelineSettings>(),
         describe::<SetMasterMix>(),
         describe::<SetMixNodePosition>(),
+        describe::<UndoWorkspace>(),
     ]
 }

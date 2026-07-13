@@ -1,16 +1,21 @@
 use std::{collections::HashSet, path::Path};
 
+use std::sync::Arc;
+
 use serde::{Deserialize, Serialize};
 
+use super::mix_graph::{
+    LegacyTrackMix, MixGraph, MixGraphSnapshot, default_master_x, default_master_y,
+    default_track_position_for,
+};
 use crate::CoreError;
 
 pub const TICKS_PER_QUARTER: u32 = 960;
 
 const DEFAULT_BPM: f64 = 120.0;
-const DEFAULT_TRACK_COUNT: u64 = 30;
+const DEFAULT_TRACK_COUNT: u64 = 10;
 const DEFAULT_TIME_SIGNATURE_NUMERATOR: u8 = 4;
 const DEFAULT_TIME_SIGNATURE_DENOMINATOR: u8 = 4;
-const MASTER_NODE_ID: &str = "master";
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,8 +59,7 @@ pub struct TimelineSnapshot {
     pub is_snap_enabled: bool,
     pub master_gain_db: f64,
     pub is_master_muted: bool,
-    pub master_node_x: f64,
-    pub master_node_y: f64,
+    pub mix_graph: MixGraphSnapshot,
     pub tracks: Vec<TimelineTrackSnapshot>,
 }
 
@@ -67,9 +71,6 @@ pub struct TimelineTrackSnapshot {
     pub is_soloed: bool,
     pub gain_db: f64,
     pub pan: f64,
-    pub is_connected: bool,
-    pub node_x: f64,
-    pub node_y: f64,
     pub clips: Vec<TimelineClipSnapshot>,
 }
 
@@ -87,7 +88,7 @@ pub struct TimelineClipSnapshot {
     pub waveform: Vec<f32>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct Timeline {
     bpm: f64,
@@ -99,16 +100,18 @@ pub(super) struct Timeline {
     master_gain_db: f64,
     #[serde(default)]
     is_master_muted: bool,
-    #[serde(default = "default_master_x")]
-    master_node_x: f64,
-    #[serde(default = "default_master_y")]
-    master_node_y: f64,
+    #[serde(default, rename = "masterNodeX", skip_serializing)]
+    legacy_master_node_x: Option<f64>,
+    #[serde(default, rename = "masterNodeY", skip_serializing)]
+    legacy_master_node_y: Option<f64>,
+    #[serde(default)]
+    mix_graph: MixGraph,
     tracks: Vec<TimelineTrack>,
     next_track_id: u64,
     next_clip_id: u64,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TimelineTrack {
     id: String,
@@ -119,16 +122,16 @@ struct TimelineTrack {
     gain_db: f64,
     #[serde(default)]
     pan: f64,
-    #[serde(default = "default_true")]
-    is_connected: bool,
-    #[serde(default)]
-    node_x: f64,
-    #[serde(default)]
-    node_y: f64,
+    #[serde(default, rename = "isConnected", skip_serializing)]
+    legacy_is_connected: Option<bool>,
+    #[serde(default, rename = "nodeX", skip_serializing)]
+    legacy_node_x: Option<f64>,
+    #[serde(default, rename = "nodeY", skip_serializing)]
+    legacy_node_y: Option<f64>,
     clips: Vec<TimelineClip>,
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct TimelineClip {
     id: String,
@@ -145,11 +148,15 @@ struct TimelineClip {
     #[serde(default)]
     source_duration_seconds: f64,
     #[serde(default)]
-    waveform: Vec<f32>,
+    waveform: Arc<Vec<f32>>,
 }
 
 impl Default for Timeline {
     fn default() -> Self {
+        let tracks = (1..=DEFAULT_TRACK_COUNT)
+            .map(default_track)
+            .collect::<Vec<_>>();
+        let mix_graph = MixGraph::new(tracks.iter().map(|track| track.id.clone()));
         Self {
             bpm: DEFAULT_BPM,
             time_signature_numerator: DEFAULT_TIME_SIGNATURE_NUMERATOR,
@@ -158,9 +165,10 @@ impl Default for Timeline {
             is_snap_enabled: true,
             master_gain_db: 0.0,
             is_master_muted: false,
-            master_node_x: default_master_x(),
-            master_node_y: default_master_y(),
-            tracks: (1..=DEFAULT_TRACK_COUNT).map(default_track).collect(),
+            legacy_master_node_x: None,
+            legacy_master_node_y: None,
+            mix_graph,
+            tracks,
             next_track_id: DEFAULT_TRACK_COUNT + 1,
             next_clip_id: 1,
         }
@@ -168,6 +176,10 @@ impl Default for Timeline {
 }
 
 impl Timeline {
+    pub(super) fn bpm(&self) -> f64 {
+        self.bpm
+    }
+
     pub(super) fn snapshot(&self) -> TimelineSnapshot {
         TimelineSnapshot {
             ticks_per_quarter: TICKS_PER_QUARTER,
@@ -178,8 +190,7 @@ impl Timeline {
             is_snap_enabled: self.is_snap_enabled,
             master_gain_db: self.master_gain_db,
             is_master_muted: self.is_master_muted,
-            master_node_x: self.master_node_x,
-            master_node_y: self.master_node_y,
+            mix_graph: self.mix_graph.snapshot(),
             tracks: self
                 .tracks
                 .iter()
@@ -190,9 +201,6 @@ impl Timeline {
                     is_soloed: track.is_soloed,
                     gain_db: track.gain_db,
                     pan: track.pan,
-                    is_connected: track.is_connected,
-                    node_x: track.node_x,
-                    node_y: track.node_y,
                     clips: track
                         .clips
                         .iter()
@@ -206,7 +214,7 @@ impl Timeline {
                             source_sample_rate: clip.source_sample_rate,
                             source_channels: clip.source_channels,
                             source_duration_seconds: clip.source_duration_seconds,
-                            waveform: clip.waveform.clone(),
+                            waveform: clip.waveform.as_ref().clone(),
                         })
                         .collect(),
                 })
@@ -221,14 +229,12 @@ impl Timeline {
             self.time_signature_denominator,
         )?;
         validate_gain(self.master_gain_db, "master")?;
-        validate_position(self.master_node_x, self.master_node_y)?;
         let mut track_ids = HashSet::new();
         let mut clip_ids = HashSet::new();
         for track in &self.tracks {
             validate_name(&track.name, "track")?;
             validate_gain(track.gain_db, "track")?;
             validate_pan(track.pan)?;
-            validate_position(track.node_x, track.node_y)?;
             if track.id.is_empty() || !track_ids.insert(track.id.as_str()) {
                 return Err(CoreError::new(
                     "project contains an invalid or duplicate track ID",
@@ -245,22 +251,24 @@ impl Timeline {
                 }
             }
         }
+        self.mix_graph.validate(&track_ids)?;
         Ok(())
     }
 
     pub(super) fn ensure_minimum_track(&mut self) -> Result<(), CoreError> {
         if self.tracks.is_empty() {
             let id = self.next_track_id()?;
+            self.mix_graph.add_track(&id)?;
             self.tracks.push(TimelineTrack {
-                id,
+                id: id.clone(),
                 name: "Track 1".to_owned(),
                 is_muted: false,
                 is_soloed: false,
                 gain_db: 0.0,
                 pan: 0.0,
-                is_connected: true,
-                node_x: 0.0,
-                node_y: 0.0,
+                legacy_is_connected: None,
+                legacy_node_x: None,
+                legacy_node_y: None,
                 clips: Vec::new(),
             });
         }
@@ -268,11 +276,32 @@ impl Timeline {
     }
 
     pub(super) fn migrate_from(&mut self, format_version: u32) {
-        if format_version < 3 {
-            self.master_node_x = default_master_x();
-            self.master_node_y = default_master_y();
-            for (index, track) in self.tracks.iter_mut().enumerate() {
-                (track.node_x, track.node_y) = default_track_position(index as u64 + 1);
+        if format_version < 4 {
+            let tracks = self
+                .tracks
+                .iter()
+                .enumerate()
+                .map(|(index, track)| {
+                    let (default_x, default_y) = default_track_position_for(index as u64 + 1);
+                    LegacyTrackMix {
+                        id: track.id.clone(),
+                        is_connected: track.legacy_is_connected.unwrap_or(true),
+                        x: track.legacy_node_x.unwrap_or(default_x),
+                        y: track.legacy_node_y.unwrap_or(default_y),
+                    }
+                })
+                .collect::<Vec<_>>();
+            self.mix_graph = MixGraph::from_legacy(
+                tracks,
+                self.legacy_master_node_x.unwrap_or_else(default_master_x),
+                self.legacy_master_node_y.unwrap_or_else(default_master_y),
+            );
+            self.legacy_master_node_x = None;
+            self.legacy_master_node_y = None;
+            for track in &mut self.tracks {
+                track.legacy_is_connected = None;
+                track.legacy_node_x = None;
+                track.legacy_node_y = None;
             }
         }
     }
@@ -319,7 +348,6 @@ impl Timeline {
         Ok(())
     }
 
-    #[allow(clippy::too_many_arguments)]
     pub(super) fn save_track(
         &mut self,
         id: Option<&str>,
@@ -328,7 +356,6 @@ impl Timeline {
         is_soloed: bool,
         gain_db: f64,
         pan: f64,
-        is_connected: bool,
     ) -> Result<(), CoreError> {
         let name = validate_name(name, "track")?;
         validate_gain(gain_db, "track")?;
@@ -344,24 +371,19 @@ impl Timeline {
             track.is_soloed = is_soloed;
             track.gain_db = gain_db;
             track.pan = pan;
-            track.is_connected = is_connected;
         } else {
             let id = self.next_track_id()?;
-            let number = id
-                .strip_prefix("track-")
-                .and_then(|number| number.parse().ok())
-                .unwrap_or(self.tracks.len() as u64 + 1);
-            let (node_x, node_y) = default_track_position(number);
+            self.mix_graph.add_track(&id)?;
             self.tracks.push(TimelineTrack {
-                id,
+                id: id.clone(),
                 name,
                 is_muted,
                 is_soloed,
                 gain_db,
                 pan,
-                is_connected,
-                node_x,
-                node_y,
+                legacy_is_connected: None,
+                legacy_node_x: None,
+                legacy_node_y: None,
                 clips: Vec::new(),
             });
         }
@@ -380,6 +402,7 @@ impl Timeline {
             ));
         }
         self.tracks.remove(index);
+        self.mix_graph.remove_track(id);
         Ok(())
     }
 
@@ -441,7 +464,7 @@ impl Timeline {
                 source_sample_rate: 0,
                 source_channels: 0,
                 source_duration_seconds: 0.0,
-                waveform: Vec::new(),
+                waveform: Arc::new(Vec::new()),
             });
         }
         self.tracks[target_track_index]
@@ -501,7 +524,7 @@ impl Timeline {
             source_sample_rate: sample_rate,
             source_channels: channels,
             source_duration_seconds: duration_seconds,
-            waveform,
+            waveform: Arc::new(waveform),
         });
         self.tracks[target_track_index]
             .clips
@@ -522,20 +545,41 @@ impl Timeline {
         x: f64,
         y: f64,
     ) -> Result<(), CoreError> {
-        validate_position(x, y)?;
-        if node_id == MASTER_NODE_ID {
-            self.master_node_x = x;
-            self.master_node_y = y;
-            return Ok(());
-        }
-        let track = self
-            .tracks
-            .iter_mut()
-            .find(|track| track.id == node_id)
-            .ok_or_else(|| CoreError::new("mix node does not exist"))?;
-        track.node_x = x;
-        track.node_y = y;
-        Ok(())
+        self.mix_graph.set_node_position(node_id, x, y)
+    }
+
+    pub(super) fn connect_mix_ports(
+        &mut self,
+        source_node_id: &str,
+        source_port_id: &str,
+        target_node_id: &str,
+        target_port_id: &str,
+    ) -> Result<(), CoreError> {
+        self.mix_graph.connect(
+            source_node_id,
+            source_port_id,
+            target_node_id,
+            target_port_id,
+        )
+    }
+
+    pub(super) fn disconnect_mix_ports(
+        &mut self,
+        source_node_id: &str,
+        source_port_id: &str,
+        target_node_id: &str,
+        target_port_id: &str,
+    ) -> Result<(), CoreError> {
+        self.mix_graph.disconnect(
+            source_node_id,
+            source_port_id,
+            target_node_id,
+            target_port_id,
+        )
+    }
+
+    pub(super) fn track_routes_to_master(&self, track_id: &str) -> bool {
+        self.mix_graph.track_routes_to_master(track_id)
     }
 
     pub(super) fn source_is_referenced(&self, path: &Path) -> bool {
@@ -601,7 +645,6 @@ impl Timeline {
 }
 
 fn default_track(number: u64) -> TimelineTrack {
-    let (node_x, node_y) = default_track_position(number);
     TimelineTrack {
         id: format!("track-{number}"),
         name: format!("Track {number}"),
@@ -609,30 +652,11 @@ fn default_track(number: u64) -> TimelineTrack {
         is_soloed: false,
         gain_db: 0.0,
         pan: 0.0,
-        is_connected: true,
-        node_x,
-        node_y,
+        legacy_is_connected: None,
+        legacy_node_x: None,
+        legacy_node_y: None,
         clips: Vec::new(),
     }
-}
-
-fn default_track_position(number: u64) -> (f64, f64) {
-    let index = number.saturating_sub(1);
-    let column = u32::try_from(index % 5).expect("track column is always less than five");
-    let row = u32::try_from(index / 5).unwrap_or(u32::MAX);
-    (f64::from(column) * 280.0, f64::from(row) * 180.0)
-}
-
-fn default_master_x() -> f64 {
-    1_600.0
-}
-
-fn default_master_y() -> f64 {
-    420.0
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn validate_settings(
@@ -683,13 +707,6 @@ fn validate_gain(gain_db: f64, entity: &str) -> Result<(), CoreError> {
 fn validate_pan(pan: f64) -> Result<(), CoreError> {
     if !pan.is_finite() || !(-1.0..=1.0).contains(&pan) {
         return Err(CoreError::new("track pan must be between -1 and 1"));
-    }
-    Ok(())
-}
-
-fn validate_position(x: f64, y: f64) -> Result<(), CoreError> {
-    if !x.is_finite() || !y.is_finite() || x.abs() > 100_000.0 || y.abs() > 100_000.0 {
-        return Err(CoreError::new("mix node position is invalid"));
     }
     Ok(())
 }
@@ -775,7 +792,7 @@ mod tests {
     fn creates_and_edits_tracks_and_clips_with_stable_ids() {
         let mut timeline = Timeline::default();
         timeline
-            .save_track(Some("track-1"), "Drums", false, false, 0.0, 0.0, true)
+            .save_track(Some("track-1"), "Drums", false, false, 0.0, 0.0)
             .expect("track should save");
         timeline
             .save_clip(None, "track-1", "Intro", 0, 3_840, 0)
@@ -850,17 +867,17 @@ mod tests {
     }
 
     #[test]
-    fn starts_with_thirty_tracks_and_preserves_monotonic_ids() {
+    fn starts_with_ten_tracks_and_preserves_monotonic_ids() {
         let mut timeline = Timeline::default();
 
-        assert_eq!(timeline.snapshot().tracks.len(), 30);
+        assert_eq!(timeline.snapshot().tracks.len(), 10);
         assert_eq!(timeline.snapshot().tracks[0].id, "track-1");
-        assert_eq!(timeline.snapshot().tracks[29].id, "track-30");
+        assert_eq!(timeline.snapshot().tracks[9].id, "track-10");
 
         timeline
-            .save_track(None, "Track 31", false, false, 0.0, 0.0, true)
+            .save_track(None, "Track 11", false, false, 0.0, 0.0)
             .expect("track should save");
-        assert_eq!(timeline.snapshot().tracks[30].id, "track-31");
+        assert_eq!(timeline.snapshot().tracks[10].id, "track-11");
     }
 
     #[test]
@@ -870,17 +887,18 @@ mod tests {
             .delete_track("track-1")
             .expect("existing track should delete");
         timeline
-            .save_track(None, "Track 31", false, false, 0.0, 0.0, true)
+            .save_track(None, "Track 11", false, false, 0.0, 0.0)
             .expect("track should save");
 
-        let track = timeline
+        let node = timeline
             .snapshot()
-            .tracks
+            .mix_graph
+            .nodes
             .into_iter()
-            .find(|track| track.id == "track-31")
-            .expect("new track should exist");
-        assert!(track.node_x.abs() < f64::EPSILON);
-        assert!((track.node_y - 1_080.0).abs() < f64::EPSILON);
+            .find(|node| node.id == "track-11")
+            .expect("new track node should exist");
+        assert!(node.x.abs() < f64::EPSILON);
+        assert!((node.y - 880.0).abs() < f64::EPSILON);
     }
 
     #[test]
