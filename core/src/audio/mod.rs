@@ -162,8 +162,13 @@ impl Audio {
     }
 
     pub fn stop(&mut self) -> TransportSnapshot {
+        let transport = self.transport();
         self.session = None;
-        self.stopped_position_tick = 0;
+        self.stopped_position_tick = if transport.state == TransportState::Playing {
+            transport.position_tick
+        } else {
+            0
+        };
         self.transport()
     }
 
@@ -322,5 +327,21 @@ impl Audio {
     #[must_use]
     pub fn duration_ticks(seconds: f64, bpm: f64, ticks_per_quarter: u32) -> u32 {
         seconds_to_ticks(seconds, bpm, ticks_per_quarter)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn stop_rewinds_when_transport_is_not_playing() {
+        let mut audio = Audio::default();
+        audio.seek(960);
+
+        let transport = audio.stop();
+
+        assert_eq!(transport.state, TransportState::Stopped);
+        assert_eq!(transport.position_tick, 0);
     }
 }

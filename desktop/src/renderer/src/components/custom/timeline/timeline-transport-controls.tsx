@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { Pause, Play, SkipBack, Square } from "lucide-react";
+import { Pause, Play, Square } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { useAppStore } from "@/stores/app-store";
@@ -13,7 +13,6 @@ export function TimelineTransportControls() {
   const play = useTransportStore((state) => state.play);
   const pause = useTransportStore((state) => state.pause);
   const stop = useTransportStore((state) => state.stop);
-  const seek = useTransportStore((state) => state.seek);
   const refresh = useTransportStore((state) => state.refresh);
 
   useEffect(() => {
@@ -43,25 +42,7 @@ export function TimelineTransportControls() {
 
   if (!workspace) return null;
   return (
-    <div className="flex items-center gap-1 border-r border-border pr-3">
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label="Return to start"
-        disabled={isPending}
-        onClick={() => void seek(0)}
-      >
-        <SkipBack />
-      </Button>
-      <Button
-        size="icon-xs"
-        variant="ghost"
-        aria-label="Stop"
-        disabled={isPending}
-        onClick={() => void stop()}
-      >
-        <Square />
-      </Button>
+    <div className="flex items-center gap-1 border-r border-border px-3">
       <Button
         size="icon-sm"
         variant={transport.state === "playing" ? "secondary" : "default"}
@@ -71,12 +52,20 @@ export function TimelineTransportControls() {
       >
         {transport.state === "playing" ? <Pause /> : <Play />}
       </Button>
-      <span
-        className="ml-2 min-w-20 truncate font-mono text-[10px] uppercase tracking-[0.12em] text-muted-foreground"
-        title={error ?? undefined}
+      <Button
+        size="icon-sm"
+        variant="ghost"
+        aria-label={transport.state === "playing" ? "Stop" : "Stop and return to start"}
+        disabled={isPending}
+        onClick={() => void stop()}
       >
-        {error ?? transport.state}
-      </span>
+        <Square />
+      </Button>
+      {error ? (
+        <span className="sr-only" role="alert">
+          {error}
+        </span>
+      ) : null}
     </div>
   );
 }

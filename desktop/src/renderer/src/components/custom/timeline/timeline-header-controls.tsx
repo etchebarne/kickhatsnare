@@ -1,7 +1,16 @@
-import { Magnet } from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+  InputGroupText,
+} from "@/components/ui/input-group";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useAppStore } from "@/stores/app-store";
 import type { SetTimelineSettingsParams } from "@shared/ipc";
 
@@ -24,14 +33,11 @@ export function TimelineHeaderControls() {
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-4 px-3">
-      <label className="flex items-center gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-          Tempo
-        </span>
-        <Input
+    <div className="flex min-w-0 items-center gap-3 px-3">
+      <InputGroup className="h-7 w-28">
+        <InputGroupInput
           key={timeline.bpm}
-          className="h-7 w-18 font-mono text-xs"
+          className="h-7 font-mono text-xs"
           type="number"
           min={20}
           max={400}
@@ -50,56 +56,60 @@ export function TimelineHeaderControls() {
             }
           }}
         />
-        <span className="hidden text-xs text-muted-foreground lg:inline">BPM</span>
-      </label>
+        <InputGroupAddon align="inline-end" className="pr-2">
+          <InputGroupText className="text-xs">BPM</InputGroupText>
+        </InputGroupAddon>
+      </InputGroup>
 
-      <label className="flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">
-        Meter
-        <select
-          className="h-7 rounded-md border border-input bg-background px-1.5 font-mono text-xs text-foreground outline-none focus:border-ring"
-          value={timeline.timeSignatureNumerator}
-          aria-label="Time signature numerator"
-          onChange={(event) =>
-            void setTimelineSettings(
-              settings({ timeSignatureNumerator: Number(event.currentTarget.value) }),
-            )
-          }
-        >
-          {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-        <span>/</span>
-        <select
-          className="h-7 rounded-md border border-input bg-background px-1.5 font-mono text-xs text-foreground outline-none focus:border-ring"
-          value={timeline.timeSignatureDenominator}
-          aria-label="Time signature denominator"
-          onChange={(event) =>
-            void setTimelineSettings(
-              settings({ timeSignatureDenominator: Number(event.currentTarget.value) }),
-            )
-          }
-        >
-          {[1, 2, 4, 8, 16, 32].map((value) => (
-            <option key={value} value={value}>
-              {value}
-            </option>
-          ))}
-        </select>
-      </label>
-
-      <Button
-        size="xs"
-        variant={timeline.isSnapEnabled ? "secondary" : "ghost"}
-        aria-pressed={timeline.isSnapEnabled}
-        onClick={() =>
-          void setTimelineSettings(settings({ isSnapEnabled: !timeline.isSnapEnabled }))
-        }
+      <div
+        className="flex items-center gap-1.5 font-mono text-xs text-muted-foreground"
+        role="group"
+        aria-label="Time signature"
       >
-        <Magnet /> Snap
-      </Button>
+        <Select
+          value={String(timeline.timeSignatureNumerator)}
+          onValueChange={(value) =>
+            void setTimelineSettings(settings({ timeSignatureNumerator: Number(value) }))
+          }
+        >
+          <SelectTrigger
+            size="sm"
+            className="h-7 w-14 px-2 font-mono text-xs text-foreground"
+            aria-label="Time signature numerator"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 12 }, (_, index) => index + 1).map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <span>/</span>
+        <Select
+          value={String(timeline.timeSignatureDenominator)}
+          onValueChange={(value) =>
+            void setTimelineSettings(settings({ timeSignatureDenominator: Number(value) }))
+          }
+        >
+          <SelectTrigger
+            size="sm"
+            className="h-7 w-14 px-2 font-mono text-xs text-foreground"
+            aria-label="Time signature denominator"
+          >
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {[1, 2, 4, 8, 16, 32].map((value) => (
+              <SelectItem key={value} value={String(value)}>
+                {value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
     </div>
   );
 }

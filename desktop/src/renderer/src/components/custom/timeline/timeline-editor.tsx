@@ -201,7 +201,7 @@ export function TimelineEditor() {
 
   function snapTick(tick: number) {
     const bounded = Math.max(0, Math.min(Math.round(tick), totalTicks));
-    return timeline.isSnapEnabled ? Math.round(bounded / gridTicks) * gridTicks : bounded;
+    return Math.round(bounded / gridTicks) * gridTicks;
   }
 
   function positionPlayhead(event: MouseEvent<HTMLElement>) {
@@ -461,7 +461,6 @@ export function TimelineEditor() {
                           )
                         : null
                     }
-                    snapEnabled={timeline.isSnapEnabled}
                     selected={clip.id === selectedClipId}
                     onSelect={setSelectedClipId}
                     onCommit={commitClip}

@@ -28,7 +28,6 @@ interface TimelineClipProps {
   pixelsPerTick: number;
   gridTicks: number;
   sourceDurationTicks: number | null;
-  snapEnabled: boolean;
   selected: boolean;
   onSelect(id: string): void;
   onCommit(params: SaveTimelineClipParams): Promise<boolean>;
@@ -41,7 +40,6 @@ export function TimelineClip({
   pixelsPerTick,
   gridTicks,
   sourceDurationTicks,
-  snapEnabled,
   selected,
   onSelect,
   onCommit,
@@ -75,9 +73,51 @@ export function TimelineClip({
     node.removeAttribute("data-dragging");
   }
 
-  function snap(tick: number) {
+  function snap(tick: number, enabled: boolean) {
     const rounded = Math.round(tick);
-    return snapEnabled ? Math.round(rounded / gridTicks) * gridTicks : rounded;
+    return enabled ? Math.round(rounded / gridTicks) * gridTicks : rounded;
+  }
+
+  function draftAt(active: DragState, clientX: number, snapEnabled: boolean): ClipDraft {
+    const deltaTicks = (clientX - active.originClientX) / pixelsPerTick;
+    const originalEnd = active.startTick + active.durationTicks;
+
+    if (active.mode === "move") {
+      return {
+        startTick: Math.max(0, snap(active.startTick + deltaTicks, snapEnabled)),
+        durationTicks: active.durationTicks,
+        sourceOffsetTicks: active.sourceOffsetTicks,
+      };
+    }
+
+    if (active.mode === "trim-end") {
+      const maximumEnd =
+        sourceDurationTicks === null
+          ? Number.POSITIVE_INFINITY
+          : active.startTick + sourceDurationTicks - active.sourceOffsetTicks;
+      const endTick = Math.min(
+        maximumEnd,
+        Math.max(active.startTick + 1, snap(originalEnd + deltaTicks, snapEnabled)),
+      );
+      return {
+        startTick: active.startTick,
+        durationTicks: endTick - active.startTick,
+        sourceOffsetTicks: active.sourceOffsetTicks,
+      };
+    }
+
+    const minimumStart = clip.sourcePath
+      ? Math.max(0, active.startTick - active.sourceOffsetTicks)
+      : 0;
+    const nextStart = Math.min(
+      originalEnd - 1,
+      Math.max(minimumStart, snap(active.startTick + deltaTicks, snapEnabled)),
+    );
+    return {
+      startTick: nextStart,
+      durationTicks: originalEnd - nextStart,
+      sourceOffsetTicks: active.sourceOffsetTicks + nextStart - active.startTick,
+    };
   }
 
   function setDropTarget(lane: HTMLElement | null) {
@@ -137,8 +177,6 @@ export function TimelineClip({
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
     const active = drag.current;
     if (!active) return;
-    const deltaTicks = (event.clientX - active.originClientX) / pixelsPerTick;
-    const originalEnd = active.startTick + active.durationTicks;
 
     if (active.mode === "move") {
       const targetLane = trackLaneAt(event.clientX, event.clientY);
@@ -147,52 +185,8 @@ export function TimelineClip({
         active.targetLaneTop = targetLane.getBoundingClientRect().top;
         setDropTarget(targetLane);
       }
-      renderDraft(
-        {
-          startTick: Math.max(0, snap(active.startTick + deltaTicks)),
-          durationTicks: active.durationTicks,
-          sourceOffsetTicks: active.sourceOffsetTicks,
-        },
-        active,
-      );
-      return;
     }
-
-    if (active.mode === "trim-end") {
-      const maximumEnd =
-        sourceDurationTicks === null
-          ? Number.POSITIVE_INFINITY
-          : active.startTick + sourceDurationTicks - active.sourceOffsetTicks;
-      const endTick = Math.min(
-        maximumEnd,
-        Math.max(active.startTick + 1, snap(originalEnd + deltaTicks)),
-      );
-      renderDraft(
-        {
-          startTick: active.startTick,
-          durationTicks: endTick - active.startTick,
-          sourceOffsetTicks: active.sourceOffsetTicks,
-        },
-        active,
-      );
-      return;
-    }
-
-    const minimumStart = clip.sourcePath
-      ? Math.max(0, active.startTick - active.sourceOffsetTicks)
-      : 0;
-    const nextStart = Math.min(
-      originalEnd - 1,
-      Math.max(minimumStart, snap(active.startTick + deltaTicks)),
-    );
-    renderDraft(
-      {
-        startTick: nextStart,
-        durationTicks: originalEnd - nextStart,
-        sourceOffsetTicks: active.sourceOffsetTicks + nextStart - active.startTick,
-      },
-      active,
-    );
+    renderDraft(draftAt(active, event.clientX, !event.altKey), active);
   }
 
   function finishDrag(event: PointerEvent<HTMLDivElement>) {
@@ -201,7 +195,14 @@ export function TimelineClip({
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
-    const next = draft.current;
+    let next = draft.current;
+    const draftChanged =
+      next &&
+      (next.startTick !== active.startTick ||
+        next.durationTicks !== active.durationTicks ||
+        next.sourceOffsetTicks !== active.sourceOffsetTicks ||
+        active.targetTrackId !== trackId);
+    if (draftChanged) next = draftAt(active, event.clientX, !event.altKey);
     drag.current = null;
     draft.current = null;
     setDropTarget(null);
