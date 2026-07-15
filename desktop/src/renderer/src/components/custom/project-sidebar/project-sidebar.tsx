@@ -1,4 +1,3 @@
-import { Sidebar, SidebarContent, SidebarRail } from "@/components/ui/sidebar";
 import { useAppStore } from "@/stores/app-store";
 
 import { ProjectTree } from "./project-tree";
@@ -29,8 +28,8 @@ export function ProjectSidebar() {
   ];
 
   return (
-    <Sidebar className="absolute h-full" collapsible="offcanvas">
-      <SidebarContent className="overflow-hidden">
+    <aside className="flex h-full min-h-0 min-w-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground">
+      <div className="min-h-0 min-w-0 flex-1 overflow-hidden px-2">
         <ProjectTree
           key={workspace ? (workspace.projectFilePath ?? `unsaved:${workspace.name}`) : "loading"}
           paths={paths}
@@ -38,9 +37,8 @@ export function ProjectSidebar() {
           pinnedRoots={pinnedRoots}
           categoryPaths={[pinnedCategory]}
         />
-      </SidebarContent>
-      <SidebarRail />
-    </Sidebar>
+      </div>
+    </aside>
   );
 }
 

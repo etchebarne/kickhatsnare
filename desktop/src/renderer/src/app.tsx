@@ -10,8 +10,8 @@ import {
   TimelineTransportControls,
 } from "@/components/custom/timeline";
 import { TitleBar } from "@/components/custom/window-controls";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
 import { useAppStore } from "@/stores/app-store";
 
 export function App() {
@@ -79,54 +79,64 @@ export function App() {
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
       <TitleBar />
-      <SidebarProvider className="relative min-h-0 flex-1 overflow-hidden">
-        <ProjectSidebar />
-        <SidebarInset className="min-h-0 overflow-hidden">
-          <header className="flex h-11 shrink-0 items-center border-b border-border bg-card">
-            <div className="flex size-11 shrink-0 items-center justify-center border-r border-border">
-              <SidebarTrigger />
-            </div>
-            <TimelineTransportControls />
-            <TimelineHeaderControls />
-            <div className="ml-auto flex items-center gap-1 px-2">
-              <Button
-                size="xs"
-                variant={view === "arrangement" ? "secondary" : "ghost"}
-                onClick={() => setView("arrangement")}
-              >
-                <Rows3 /> Arrangement
-              </Button>
-              <Button
-                size="xs"
-                variant={view === "mix" ? "secondary" : "ghost"}
-                onClick={() => setView("mix")}
-              >
-                <Network /> Mix
-              </Button>
-            </div>
-            {operationError ? (
-              <p className="truncate px-3 text-xs text-destructive" role="alert">
-                {operationError}
-              </p>
-            ) : null}
-          </header>
-          <main className="min-h-0 flex-1 overflow-hidden">
-            {workspace ? (
-              view === "arrangement" ? (
-                <TimelineEditor />
-              ) : (
-                <MixGraphEditor />
-              )
-            ) : (
-              <div className="grid h-full place-items-center px-6">
-                <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
-                  {serverStatus === "connecting" ? "Connecting to core" : "Core unavailable"}
-                </p>
+      <ResizablePanelGroup className="min-h-0 flex-1">
+        <ResizablePanel
+          id="project-sidebar"
+          defaultSize="16rem"
+          minSize="12rem"
+          maxSize="30rem"
+          collapsedSize={0}
+          collapsible
+          groupResizeBehavior="preserve-pixel-size"
+        >
+          <ProjectSidebar />
+        </ResizablePanel>
+        <ResizableHandle aria-label="Resize project sidebar" />
+        <ResizablePanel id="workspace" className="min-w-0">
+          <section className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
+            <header className="flex h-11 shrink-0 items-center border-b border-border bg-card">
+              <TimelineTransportControls />
+              <TimelineHeaderControls />
+              <div className="ml-auto flex items-center gap-1 px-2">
+                <Button
+                  size="xs"
+                  variant={view === "arrangement" ? "secondary" : "ghost"}
+                  onClick={() => setView("arrangement")}
+                >
+                  <Rows3 /> Arrangement
+                </Button>
+                <Button
+                  size="xs"
+                  variant={view === "mix" ? "secondary" : "ghost"}
+                  onClick={() => setView("mix")}
+                >
+                  <Network /> Mix
+                </Button>
               </div>
-            )}
-          </main>
-        </SidebarInset>
-      </SidebarProvider>
+              {operationError ? (
+                <p className="truncate px-3 text-xs text-destructive" role="alert">
+                  {operationError}
+                </p>
+              ) : null}
+            </header>
+            <main className="min-h-0 flex-1 overflow-hidden">
+              {workspace ? (
+                view === "arrangement" ? (
+                  <TimelineEditor />
+                ) : (
+                  <MixGraphEditor />
+                )
+              ) : (
+                <div className="grid h-full place-items-center px-6">
+                  <p className="font-mono text-xs uppercase tracking-[0.25em] text-muted-foreground">
+                    {serverStatus === "connecting" ? "Connecting to core" : "Core unavailable"}
+                  </p>
+                </div>
+              )}
+            </main>
+          </section>
+        </ResizablePanel>
+      </ResizablePanelGroup>
       <SettingsDialog />
     </div>
   );

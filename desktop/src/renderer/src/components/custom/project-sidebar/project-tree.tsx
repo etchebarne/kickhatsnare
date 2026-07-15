@@ -25,6 +25,8 @@ const treeStyles = `
   [data-file-tree-search-container] {
     box-sizing: border-box;
     flex: 0 0 44px;
+    min-width: 0;
+    width: 100%;
     align-items: center;
     margin-bottom: 0;
     padding-inline: 4px;
@@ -32,11 +34,15 @@ const treeStyles = `
   }
 
   [data-file-tree-search-input] {
+    box-sizing: border-box;
+    min-width: 0;
+    width: 100%;
     margin-block: 0;
   }
 
   [data-file-tree-virtualized-scroll='true'] {
     padding-top: 4px;
+    scrollbar-gutter: auto;
   }
 
   [data-external-audio-drop-target='true'] {
