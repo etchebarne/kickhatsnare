@@ -34,10 +34,10 @@ export function TimelineHeaderControls() {
 
   return (
     <div className="flex min-w-0 items-center gap-3 px-3">
-      <InputGroup className="h-7 w-28">
+      <InputGroup className="h-8 w-28">
         <InputGroupInput
           key={timeline.bpm}
-          className="h-7 font-mono text-xs"
+          className="h-8 font-mono text-xs"
           type="number"
           min={20}
           max={400}
@@ -74,7 +74,7 @@ export function TimelineHeaderControls() {
         >
           <SelectTrigger
             size="sm"
-            className="h-7 w-14 px-2 font-mono text-xs text-foreground"
+            className="h-8 w-14 px-2 font-mono text-xs text-foreground"
             aria-label="Time signature numerator"
           >
             <SelectValue />
@@ -96,7 +96,7 @@ export function TimelineHeaderControls() {
         >
           <SelectTrigger
             size="sm"
-            className="h-7 w-14 px-2 font-mono text-xs text-foreground"
+            className="h-8 w-14 px-2 font-mono text-xs text-foreground"
             aria-label="Time signature denominator"
           >
             <SelectValue />

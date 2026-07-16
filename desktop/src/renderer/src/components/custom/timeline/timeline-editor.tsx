@@ -52,6 +52,7 @@ export function TimelineEditor() {
   const importAudioFiles = useAppStore((state) => state.importAudioFiles);
   const seek = useTransportStore((state) => state.seek);
   const scrollContainer = useRef<HTMLDivElement>(null);
+  const playheadMarker = useRef<HTMLDivElement>(null);
   const trackHeight = useRef(80);
   const horizontalZoom = useRef(96);
   const [pixelsPerQuarter, setPixelsPerQuarter] = useState(96);
@@ -262,20 +263,6 @@ export function TimelineEditor() {
     void deleteTimelineTrack(track.id);
   }
 
-  function addClip(
-    track: TimelineTrack,
-    startTick = useTransportStore.getState().transport.positionTick,
-  ) {
-    void saveTimelineClip({
-      id: null,
-      trackId: track.id,
-      name: `Clip ${track.clips.length + 1}`,
-      startTick: snapTick(startTick),
-      durationTicks: ticksPerBar,
-      sourceOffsetTicks: 0,
-    });
-  }
-
   function commitClip(params: SaveTimelineClipParams) {
     return saveTimelineClip(params);
   }
@@ -353,7 +340,11 @@ export function TimelineEditor() {
         style={{ "--timeline-track-height": "80px" } as CSSProperties}
       >
         <div className="relative min-h-full" style={{ width: TRACK_HEADER_WIDTH + timelineWidth }}>
-          <TimelinePlayhead leftOffset={TRACK_HEADER_WIDTH} pixelsPerTick={pixelsPerTick} />
+          <TimelinePlayhead
+            leftOffset={TRACK_HEADER_WIDTH}
+            markerRef={playheadMarker}
+            pixelsPerTick={pixelsPerTick}
+          />
           <div
             className="sticky top-0 z-30 grid h-8 border-b border-border bg-card"
             style={{ gridTemplateColumns: `${TRACK_HEADER_WIDTH}px ${timelineWidth}px` }}
@@ -374,6 +365,12 @@ export function TimelineEditor() {
               onPointerMove={dragPlayhead}
               onPointerUp={finishPlayheadDrag}
             >
+              <div
+                ref={playheadMarker}
+                className="pointer-events-none absolute inset-y-0 left-0 z-10 w-px will-change-transform"
+              >
+                <div className="absolute -left-[5px] bottom-0 size-0 border-x-[5px] border-t-[7px] border-x-transparent border-t-foreground" />
+              </div>
               {rulerBars.map((bar) => (
                 <span
                   key={bar.number}
@@ -431,14 +428,6 @@ export function TimelineEditor() {
                   }}
                 />
                 <div className="flex shrink-0">
-                  <Button
-                    size="icon-xs"
-                    variant="ghost"
-                    aria-label={`Add clip to ${track.name}`}
-                    onClick={() => addClip(track)}
-                  >
-                    <Plus />
-                  </Button>
                   <Button
                     size="icon-xs"
                     variant="ghost"

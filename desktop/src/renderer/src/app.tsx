@@ -99,14 +99,14 @@ export function App() {
               <TimelineHeaderControls />
               <div className="ml-auto flex items-center gap-1 px-2">
                 <Button
-                  size="xs"
+                  size="sm"
                   variant={view === "arrangement" ? "secondary" : "ghost"}
                   onClick={() => setView("arrangement")}
                 >
                   <Rows3 /> Arrangement
                 </Button>
                 <Button
-                  size="xs"
+                  size="sm"
                   variant={view === "mix" ? "secondary" : "ghost"}
                   onClick={() => setView("mix")}
                 >
