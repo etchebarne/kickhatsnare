@@ -4,7 +4,7 @@ import {
   useState,
   type CSSProperties,
   type DragEvent,
-  type MouseEvent,
+  type PointerEvent,
 } from "react";
 import { Plus, Trash2 } from "lucide-react";
 
@@ -112,7 +112,9 @@ export function TimelineEditor() {
     let pendingAnchor: { tick: number; pointerX: number } | undefined;
 
     function handleWheel(event: WheelEvent) {
-      if (!event.ctrlKey && !event.altKey) return;
+      const isRuler =
+        event.target instanceof HTMLElement && event.target.closest("[data-timeline-ruler]");
+      if (!event.ctrlKey && !event.altKey && !isRuler) return;
       event.preventDefault();
 
       if (event.altKey && !event.ctrlKey) {
@@ -198,15 +200,34 @@ export function TimelineEditor() {
   const gridTicks = automaticGrid.ticks;
   const timelineWidth = totalTicks * pixelsPerTick;
   const laneStyle = timelineGridStyle(automaticGrid, pixelsPerTick);
+  const rulerStyle = timelineGridStyle(automaticGrid, pixelsPerTick, 0.35);
 
   function snapTick(tick: number) {
     const bounded = Math.max(0, Math.min(Math.round(tick), totalTicks));
     return Math.round(bounded / gridTicks) * gridTicks;
   }
 
-  function positionPlayhead(event: MouseEvent<HTMLElement>) {
+  function positionPlayhead(event: { clientX: number; currentTarget: HTMLElement }) {
     const bounds = event.currentTarget.getBoundingClientRect();
     void seek(snapTick((event.clientX - bounds.left) / pixelsPerTick));
+  }
+
+  function startPlayheadDrag(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    positionPlayhead(event);
+  }
+
+  function dragPlayhead(event: PointerEvent<HTMLElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    positionPlayhead(event);
+  }
+
+  function finishPlayheadDrag(event: PointerEvent<HTMLElement>) {
+    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+    positionPlayhead(event);
+    event.currentTarget.releasePointerCapture(event.pointerId);
   }
 
   function addTrack() {
@@ -346,9 +367,12 @@ export function TimelineEditor() {
               </Button>
             </div>
             <div
-              className="relative cursor-crosshair overflow-hidden"
-              style={laneStyle}
-              onMouseDown={positionPlayhead}
+              data-timeline-ruler
+              className="relative touch-none cursor-crosshair overflow-hidden bg-card"
+              style={rulerStyle}
+              onPointerDown={startPlayheadDrag}
+              onPointerMove={dragPlayhead}
+              onPointerUp={finishPlayheadDrag}
             >
               {rulerBars.map((bar) => (
                 <span
@@ -557,12 +581,13 @@ function gridForZoom(
 function timelineGridStyle(
   grid: { ticks: number; mediumTicks: number; majorTicks: number },
   pixelsPerTick: number,
+  opacity = 1,
 ): CSSProperties {
   return {
     backgroundImage: [
-      "linear-gradient(to right, color-mix(in oklch, var(--foreground) 8%, transparent) 1px, transparent 1px)",
-      "linear-gradient(to right, color-mix(in oklch, var(--foreground) 14%, transparent) 1px, transparent 1px)",
-      "linear-gradient(to right, color-mix(in oklch, var(--foreground) 28%, transparent) 1px, transparent 1px)",
+      `linear-gradient(to right, color-mix(in oklch, var(--foreground) ${8 * opacity}%, transparent) 1px, transparent 1px)`,
+      `linear-gradient(to right, color-mix(in oklch, var(--foreground) ${14 * opacity}%, transparent) 1px, transparent 1px)`,
+      `linear-gradient(to right, color-mix(in oklch, var(--foreground) ${28 * opacity}%, transparent) 1px, transparent 1px)`,
     ].join(","),
     backgroundSize: [grid.ticks, grid.mediumTicks, grid.majorTicks]
       .map((ticks) => `${ticks * pixelsPerTick}px 100%`)
