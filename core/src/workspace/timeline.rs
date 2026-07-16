@@ -473,6 +473,55 @@ impl Timeline {
         Ok(())
     }
 
+    pub(super) fn split_clip(&mut self, id: &str, split_tick: u32) -> Result<(), CoreError> {
+        let (track_index, clip_index) = self
+            .tracks
+            .iter()
+            .enumerate()
+            .find_map(|(track_index, track)| {
+                track
+                    .clips
+                    .iter()
+                    .position(|clip| clip.id == id)
+                    .map(|clip_index| (track_index, clip_index))
+            })
+            .ok_or_else(|| CoreError::new("timeline clip does not exist"))?;
+        let clip = &self.tracks[track_index].clips[clip_index];
+        let end_tick = clip
+            .start_tick
+            .checked_add(clip.duration_ticks)
+            .ok_or_else(|| {
+                CoreError::new("timeline clip range exceeds the supported tick range")
+            })?;
+        if split_tick <= clip.start_tick || split_tick >= end_tick {
+            return Err(CoreError::new("split point must be inside timeline clip"));
+        }
+        let left_duration = split_tick - clip.start_tick;
+        let right_duration = end_tick - split_tick;
+        let right_source_offset = clip
+            .source_offset_ticks
+            .checked_add(left_duration)
+            .ok_or_else(|| {
+                CoreError::new("timeline clip source range exceeds the supported tick range")
+            })?;
+        let right_id = self.next_clip_id()?;
+        let right = {
+            let left = &mut self.tracks[track_index].clips[clip_index];
+            let mut right = left.clone();
+            left.duration_ticks = left_duration;
+            right.id = right_id;
+            right.start_tick = split_tick;
+            right.duration_ticks = right_duration;
+            right.source_offset_ticks = right_source_offset;
+            right
+        };
+        self.tracks[track_index].clips.push(right);
+        self.tracks[track_index]
+            .clips
+            .sort_by_key(|clip| (clip.start_tick, clip.id.clone()));
+        Ok(())
+    }
+
     pub(super) fn delete_clip(&mut self, id: &str) -> Result<(), CoreError> {
         for track in &mut self.tracks {
             if let Some(index) = track.clips.iter().position(|clip| clip.id == id) {
@@ -786,6 +835,8 @@ fn validate_clip_range(start_tick: u32, duration_ticks: u32) -> Result<(), CoreE
 
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use super::{GridDivision, TICKS_PER_QUARTER, Timeline};
 
     #[test]
@@ -814,6 +865,68 @@ mod tests {
         let moved = timeline.snapshot();
         assert!(moved.tracks[0].clips.is_empty());
         assert_eq!(moved.tracks[1].clips[0].id, "clip-1");
+    }
+
+    #[test]
+    fn splits_audio_clips_without_copying_source_data() {
+        let mut timeline = Timeline::default();
+        timeline
+            .add_audio_clip(
+                "track-1",
+                "Kick.wav",
+                "Kick",
+                960,
+                3_840,
+                48_000,
+                2,
+                2.0,
+                vec![0.25, 0.5],
+            )
+            .expect("audio clip should be added");
+
+        timeline
+            .split_clip("clip-1", 2_880)
+            .expect("audio clip should split");
+
+        let clips = &timeline.tracks[0].clips;
+        assert_eq!(clips.len(), 2);
+        assert_eq!(clips[0].id, "clip-1");
+        assert_eq!(clips[0].start_tick, 960);
+        assert_eq!(clips[0].duration_ticks, 1_920);
+        assert_eq!(clips[0].source_offset_ticks, 0);
+        assert_eq!(clips[1].id, "clip-2");
+        assert_eq!(clips[1].name, "Kick");
+        assert_eq!(clips[1].start_tick, 2_880);
+        assert_eq!(clips[1].duration_ticks, 1_920);
+        assert_eq!(clips[1].source_offset_ticks, 1_920);
+        assert_eq!(clips[1].source_path.as_deref(), Some("Kick.wav"));
+        assert!(Arc::ptr_eq(&clips[0].waveform, &clips[1].waveform));
+    }
+
+    #[test]
+    fn rejects_split_points_at_clip_boundaries_without_mutating() {
+        let mut timeline = Timeline::default();
+        timeline
+            .save_clip(None, "track-1", "Region", 960, 1_920, 0)
+            .expect("clip should save");
+        let before = timeline.clone();
+
+        let start_error = timeline
+            .split_clip("clip-1", 960)
+            .expect_err("clip start should not split");
+        let end_error = timeline
+            .split_clip("clip-1", 2_880)
+            .expect_err("clip end should not split");
+
+        assert_eq!(
+            start_error.to_string(),
+            "split point must be inside timeline clip"
+        );
+        assert_eq!(
+            end_error.to_string(),
+            "split point must be inside timeline clip"
+        );
+        assert_eq!(timeline, before);
     }
 
     #[test]

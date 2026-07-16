@@ -7,6 +7,7 @@ import { SettingsDialog } from "@/components/custom/settings";
 import {
   TimelineEditor,
   TimelineHeaderControls,
+  TimelineToolControls,
   TimelineTransportControls,
 } from "@/components/custom/timeline";
 import { TitleBar } from "@/components/custom/window-controls";
@@ -96,6 +97,7 @@ export function App() {
           <section className="relative flex h-full min-h-0 w-full flex-col overflow-hidden bg-background">
             <header className="flex h-11 shrink-0 items-center border-b border-border bg-card">
               <TimelineTransportControls />
+              {view === "arrangement" ? <TimelineToolControls /> : null}
               <TimelineHeaderControls />
               <div className="ml-auto flex items-center gap-1 px-2">
                 <Button

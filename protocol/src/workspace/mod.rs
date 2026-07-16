@@ -18,6 +18,7 @@ mod save_timeline_track;
 mod set_master_mix;
 mod set_mix_node_position;
 mod set_timeline_settings;
+mod split_timeline_clip;
 mod undo;
 
 pub use add_audio_clip::{AddAudioClip, AddAudioClipParams};
@@ -40,6 +41,7 @@ pub use save_timeline_track::{SaveTimelineTrack, SaveTimelineTrackParams};
 pub use set_master_mix::{SetMasterMix, SetMasterMixParams};
 pub use set_mix_node_position::{SetMixNodePosition, SetMixNodePositionParams};
 pub use set_timeline_settings::{SetTimelineSettings, SetTimelineSettingsParams};
+pub use split_timeline_clip::{SplitTimelineClip, SplitTimelineClipParams};
 pub use undo::{UndoWorkspace, UndoWorkspaceParams};
 
 use schemars::JsonSchema;
@@ -229,6 +231,7 @@ pub(crate) fn methods() -> Vec<ContractMethod> {
         describe::<SetTimelineSettings>(),
         describe::<SetMasterMix>(),
         describe::<SetMixNodePosition>(),
+        describe::<SplitTimelineClip>(),
         describe::<UndoWorkspace>(),
     ]
 }

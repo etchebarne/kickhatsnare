@@ -15,7 +15,10 @@ use arc_swap::ArcSwap;
 use crossbeam_queue::ArrayQueue;
 use rodio::{Decoder, Source};
 
-use crate::{CoreError, workspace::PlaybackProject};
+use crate::{
+    CoreError,
+    workspace::{PlaybackClip, PlaybackProject},
+};
 
 pub const NO_SEEK: u64 = u64::MAX;
 
@@ -92,6 +95,8 @@ pub struct RenderClip {
     start_frame: u64,
     end_frame: u64,
     source_offset_seconds: f64,
+    fade_in_at_start: bool,
+    fade_out_at_end: bool,
     fade_in_on_activation: bool,
 }
 
@@ -175,6 +180,14 @@ impl RenderPlan {
                                 project.bpm,
                                 project.ticks_per_quarter,
                             ),
+                            fade_in_at_start: !track
+                                .clips
+                                .iter()
+                                .any(|previous| clips_are_source_contiguous(previous, clip)),
+                            fade_out_at_end: !track
+                                .clips
+                                .iter()
+                                .any(|next| clips_are_source_contiguous(clip, next)),
                             fade_in_on_activation: false,
                         }
                     })
@@ -884,6 +897,13 @@ pub fn seconds_to_ticks(seconds: f64, bpm: f64, ticks_per_quarter: u32) -> u32 {
         .clamp(1.0, f64::from(u32::MAX)) as u32
 }
 
+fn clips_are_source_contiguous(left: &PlaybackClip, right: &PlaybackClip) -> bool {
+    left.source_path == right.source_path
+        && left.start_tick.checked_add(left.duration_ticks) == Some(right.start_tick)
+        && left.source_offset_ticks.checked_add(left.duration_ticks)
+            == Some(right.source_offset_ticks)
+}
+
 fn frame_to_seconds(frame: u64, sample_rate: u32) -> f64 {
     let sample_rate_u64 = u64::from(sample_rate);
     Duration::from_secs(frame / sample_rate_u64).as_secs_f64()
@@ -908,7 +928,11 @@ fn clip_envelope(
     sample_rate: u32,
 ) -> f32 {
     let fade_frames = (u64::from(sample_rate) / 200).max(1);
-    let natural_fade_in = frame.saturating_sub(clip.start_frame).min(fade_frames);
+    let natural_fade_in = if clip.fade_in_at_start {
+        frame.saturating_sub(clip.start_frame).min(fade_frames)
+    } else {
+        fade_frames
+    };
     let activation_fade_in = if clip.fade_in_on_activation {
         activation_frame.map_or(fade_frames, |activation| {
             frame.saturating_sub(activation).min(fade_frames)
@@ -916,10 +940,13 @@ fn clip_envelope(
     } else {
         fade_frames
     };
-    let fade_out = clip
-        .end_frame
-        .saturating_sub(frame.saturating_add(1))
-        .min(fade_frames);
+    let fade_out = if clip.fade_out_at_end {
+        clip.end_frame
+            .saturating_sub(frame.saturating_add(1))
+            .min(fade_frames)
+    } else {
+        fade_frames
+    };
     natural_fade_in.min(activation_fade_in).min(fade_out) as f32 / fade_frames as f32
 }
 
@@ -946,11 +973,11 @@ mod tests {
 
     use crossbeam_queue::ArrayQueue;
 
-    use crate::workspace::PlaybackProject;
+    use crate::workspace::{PlaybackClip, PlaybackProject, PlaybackTrack};
 
     use super::{
         AudioStreams, NO_SEEK, PlaybackState, PreparedRenderState, RenderPlan, TimelineSource,
-        TransportControl, frame_to_tick, seconds_to_ticks, tick_to_frame,
+        TransportControl, clip_envelope, frame_to_tick, seconds_to_ticks, tick_to_frame,
     };
 
     #[test]
@@ -958,6 +985,49 @@ mod tests {
         assert_eq!(tick_to_frame(960, 120.0, 960, 48_000), 24_000);
         assert_eq!(frame_to_tick(24_000, 120.0, 960, 48_000), 960);
         assert_eq!(seconds_to_ticks(0.5, 120.0, 960), 960);
+    }
+
+    #[test]
+    fn contiguous_clips_from_one_source_do_not_fade_at_the_split() {
+        let project = PlaybackProject {
+            bpm: 120.0,
+            ticks_per_quarter: 960,
+            master_gain_db: 0.0,
+            is_master_muted: false,
+            tracks: vec![PlaybackTrack {
+                id: "track-1".to_owned(),
+                is_muted: false,
+                is_soloed: false,
+                gain_db: 0.0,
+                pan: 0.0,
+                is_connected: true,
+                clips: vec![
+                    PlaybackClip {
+                        id: "clip-1".to_owned(),
+                        source_path: "Kick.wav".into(),
+                        start_tick: 0,
+                        duration_ticks: 960,
+                        source_offset_ticks: 0,
+                    },
+                    PlaybackClip {
+                        id: "clip-2".to_owned(),
+                        source_path: "Kick.wav".into(),
+                        start_tick: 960,
+                        duration_ticks: 960,
+                        source_offset_ticks: 960,
+                    },
+                ],
+            }],
+        };
+
+        let plan = RenderPlan::build(&project, 48_000);
+        let left = &plan.tracks[0].clips[0];
+        let right = &plan.tracks[0].clips[1];
+
+        assert!(!left.fade_out_at_end);
+        assert!(!right.fade_in_at_start);
+        assert!((clip_envelope(left, left.end_frame - 1, None, 48_000) - 1.0).abs() < f32::EPSILON);
+        assert!((clip_envelope(right, right.start_frame, None, 48_000) - 1.0).abs() < f32::EPSILON);
     }
 
     #[test]

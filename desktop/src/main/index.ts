@@ -190,6 +190,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.workspaceSetMixNodePosition, (_event, params) =>
     getCoreServer().setMixNodePosition(params),
   );
+  ipcMain.handle(ipcChannels.workspaceSplitTimelineClip, (_event, params) =>
+    getCoreServer().splitTimelineClip(params),
+  );
   ipcMain.handle(ipcChannels.workspaceUndo, () => getCoreServer().undoWorkspace());
   ipcMain.handle(ipcChannels.windowMinimize, (event) => windowForEvent(event)?.minimize());
   ipcMain.handle(ipcChannels.windowToggleMaximize, (event) => {
@@ -239,6 +242,7 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.workspaceSetTimelineSettings);
   ipcMain.removeHandler(ipcChannels.workspaceSetMasterMix);
   ipcMain.removeHandler(ipcChannels.workspaceSetMixNodePosition);
+  ipcMain.removeHandler(ipcChannels.workspaceSplitTimelineClip);
   ipcMain.removeHandler(ipcChannels.workspaceUndo);
   ipcMain.removeHandler(ipcChannels.windowMinimize);
   ipcMain.removeHandler(ipcChannels.windowToggleMaximize);

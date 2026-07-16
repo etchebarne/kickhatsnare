@@ -18,6 +18,7 @@ mod save_timeline_track;
 mod set_master_mix;
 mod set_mix_node_position;
 mod set_timeline_settings;
+mod split_timeline_clip;
 mod undo;
 
 use kickhatsnare_core::{Core, workspace::WorkspaceEditImpact};
@@ -28,7 +29,7 @@ use kickhatsnare_protocol::{
         DeleteTimelineTrack, DeleteWorkspaceEntry, DisconnectMixPorts, GetWorkspace,
         ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace, OpenWorkspace, RedoWorkspace,
         SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs, SetMasterMix,
-        SetMixNodePosition, SetTimelineSettings, UndoWorkspace,
+        SetMixNodePosition, SetTimelineSettings, SplitTimelineClip, UndoWorkspace,
     },
 };
 use serde_json::Value;
@@ -62,6 +63,7 @@ pub(super) fn dispatch(
         SetMasterMix::NAME => set_master_mix::handle(params, core.workspaces()),
         SetMixNodePosition::NAME => set_mix_node_position::handle(params, core.workspaces()),
         SetTimelineSettings::NAME => set_timeline_settings::handle(params, core.workspaces()),
+        SplitTimelineClip::NAME => split_timeline_clip::handle(params, core.workspaces()),
         UndoWorkspace::NAME => undo::handle(params, core.workspaces()),
         _ => Err(ApiError::method_not_found("workspace", action)),
     };
@@ -70,7 +72,10 @@ pub(super) fn dispatch(
             ConnectMixPorts::NAME | DisconnectMixPorts::NAME | SetMasterMix::NAME => {
                 core.sync_audio_mix().map_err(|error| core_error(&error))?;
             }
-            DeleteTimelineClip::NAME | DeleteTimelineTrack::NAME | SaveTimelineClip::NAME => {
+            DeleteTimelineClip::NAME
+            | DeleteTimelineTrack::NAME
+            | SaveTimelineClip::NAME
+            | SplitTimelineClip::NAME => {
                 core.refresh_audio_timeline()
                     .map_err(|error| core_error(&error))?;
             }

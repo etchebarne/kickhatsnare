@@ -14,6 +14,7 @@ export type ConnectMixPortsParams = ParamsFor<"workspace.connectMixPorts">;
 export type DisconnectMixPortsParams = ParamsFor<"workspace.disconnectMixPorts">;
 export type SetMasterMixParams = ParamsFor<"workspace.setMasterMix">;
 export type SetMixNodePositionParams = ParamsFor<"workspace.setMixNodePosition">;
+export type SplitTimelineClipParams = ParamsFor<"workspace.splitTimelineClip">;
 export type TransportSnapshot = ResultFor<"audio.getTransport">;
 
 export const ipcChannels = {
@@ -48,6 +49,7 @@ export const ipcChannels = {
   workspaceSetTimelineSettings: "workspace:set-timeline-settings",
   workspaceSetMasterMix: "workspace:set-master-mix",
   workspaceSetMixNodePosition: "workspace:set-mix-node-position",
+  workspaceSplitTimelineClip: "workspace:split-timeline-clip",
   workspaceUndo: "workspace:undo",
   windowMinimize: "window:minimize",
   windowToggleMaximize: "window:toggle-maximize",
@@ -86,6 +88,7 @@ export interface KickHatSnareApi {
   setTimelineSettings(params: SetTimelineSettingsParams): Promise<WorkspaceSnapshot>;
   setMasterMix(params: SetMasterMixParams): Promise<WorkspaceSnapshot>;
   setMixNodePosition(params: SetMixNodePositionParams): Promise<WorkspaceSnapshot>;
+  splitTimelineClip(params: SplitTimelineClipParams): Promise<WorkspaceSnapshot>;
   undoWorkspace(): Promise<WorkspaceSnapshot>;
   minimizeWindow(): Promise<void>;
   toggleMaximizeWindow(): Promise<void>;

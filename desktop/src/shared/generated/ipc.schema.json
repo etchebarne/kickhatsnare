@@ -8790,6 +8790,409 @@
         "type": "object"
       }
     },
+    "workspace.splitTimelineClip": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "splitTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "splitTick"
+        ],
+        "title": "SplitTimelineClipParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "GridDivision": {
+            "enum": [
+              "whole",
+              "half",
+              "quarter",
+              "eighth",
+              "sixteenth",
+              "thirtySecond",
+              "quarterTriplet",
+              "eighthTriplet",
+              "sixteenthTriplet"
+            ],
+            "type": "string"
+          },
+          "MixConnection": {
+            "properties": {
+              "sourceNodeId": {
+                "type": "string"
+              },
+              "sourcePortId": {
+                "type": "string"
+              },
+              "targetNodeId": {
+                "type": "string"
+              },
+              "targetPortId": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "sourceNodeId",
+              "sourcePortId",
+              "targetNodeId",
+              "targetPortId"
+            ],
+            "type": "object"
+          },
+          "MixGraph": {
+            "properties": {
+              "connections": {
+                "items": {
+                  "$ref": "#/$defs/MixConnection"
+                },
+                "type": "array"
+              },
+              "nodes": {
+                "items": {
+                  "$ref": "#/$defs/MixNode"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "nodes",
+              "connections"
+            ],
+            "type": "object"
+          },
+          "MixNode": {
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "$ref": "#/$defs/MixNodeKind"
+              },
+              "ports": {
+                "items": {
+                  "$ref": "#/$defs/MixPort"
+                },
+                "type": "array"
+              },
+              "trackId": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "x": {
+                "format": "double",
+                "type": "number"
+              },
+              "y": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "kind",
+              "x",
+              "y",
+              "ports"
+            ],
+            "type": "object"
+          },
+          "MixNodeKind": {
+            "enum": [
+              "trackChannel",
+              "masterOutput"
+            ],
+            "type": "string"
+          },
+          "MixPort": {
+            "properties": {
+              "allowsMultipleConnections": {
+                "type": "boolean"
+              },
+              "direction": {
+                "$ref": "#/$defs/MixPortDirection"
+              },
+              "id": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              },
+              "signalType": {
+                "$ref": "#/$defs/MixSignalType"
+              }
+            },
+            "required": [
+              "id",
+              "label",
+              "direction",
+              "signalType",
+              "allowsMultipleConnections"
+            ],
+            "type": "object"
+          },
+          "MixPortDirection": {
+            "enum": [
+              "input",
+              "output"
+            ],
+            "type": "string"
+          },
+          "MixSignalType": {
+            "enum": [
+              "audio"
+            ],
+            "type": "string"
+          },
+          "TimelineClip": {
+            "properties": {
+              "durationTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "id": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "sourceChannels": {
+                "format": "uint16",
+                "maximum": 65535,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourceDurationSeconds": {
+                "format": "double",
+                "type": "number"
+              },
+              "sourceOffsetTicks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "sourcePath": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "sourceSampleRate": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "waveform": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "startTick",
+              "durationTicks",
+              "sourceOffsetTicks",
+              "sourceSampleRate",
+              "sourceChannels",
+              "sourceDurationSeconds",
+              "waveform"
+            ],
+            "type": "object"
+          },
+          "TimelineSnapshot": {
+            "properties": {
+              "bpm": {
+                "format": "double",
+                "type": "number"
+              },
+              "gridDivision": {
+                "$ref": "#/$defs/GridDivision"
+              },
+              "isMasterMuted": {
+                "type": "boolean"
+              },
+              "isSnapEnabled": {
+                "type": "boolean"
+              },
+              "masterGainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "mixGraph": {
+                "$ref": "#/$defs/MixGraph"
+              },
+              "ticksPerQuarter": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureDenominator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "timeSignatureNumerator": {
+                "format": "uint8",
+                "maximum": 255,
+                "minimum": 0,
+                "type": "integer"
+              },
+              "tracks": {
+                "items": {
+                  "$ref": "#/$defs/TimelineTrack"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "ticksPerQuarter",
+              "bpm",
+              "timeSignatureNumerator",
+              "timeSignatureDenominator",
+              "gridDivision",
+              "isSnapEnabled",
+              "masterGainDb",
+              "isMasterMuted",
+              "mixGraph",
+              "tracks"
+            ],
+            "type": "object"
+          },
+          "TimelineTrack": {
+            "properties": {
+              "clips": {
+                "items": {
+                  "$ref": "#/$defs/TimelineClip"
+                },
+                "type": "array"
+              },
+              "gainDb": {
+                "format": "double",
+                "type": "number"
+              },
+              "id": {
+                "type": "string"
+              },
+              "isMuted": {
+                "type": "boolean"
+              },
+              "isSoloed": {
+                "type": "boolean"
+              },
+              "name": {
+                "type": "string"
+              },
+              "pan": {
+                "format": "double",
+                "type": "number"
+              }
+            },
+            "required": [
+              "id",
+              "name",
+              "isMuted",
+              "isSoloed",
+              "gainDb",
+              "pan",
+              "clips"
+            ],
+            "type": "object"
+          },
+          "WorkspaceHistorySnapshot": {
+            "properties": {
+              "canRedo": {
+                "type": "boolean"
+              },
+              "canUndo": {
+                "type": "boolean"
+              },
+              "redoLabel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "undoLabel": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              }
+            },
+            "required": [
+              "canUndo",
+              "canRedo"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "history": {
+            "$ref": "#/$defs/WorkspaceHistorySnapshot"
+          },
+          "isDirty": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "projectFilePath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "rootPath": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "timeline": {
+            "$ref": "#/$defs/TimelineSnapshot"
+          }
+        },
+        "required": [
+          "name",
+          "files",
+          "timeline",
+          "history",
+          "isDirty"
+        ],
+        "title": "WorkspaceSnapshot",
+        "type": "object"
+      }
+    },
     "workspace.undo": {
       "params": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -9180,5 +9583,5 @@
       }
     }
   },
-  "protocolVersion": 11
+  "protocolVersion": 12
 }

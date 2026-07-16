@@ -927,6 +927,21 @@ impl Workspaces {
         })
     }
 
+    /// Splits a timeline clip into two contiguous clips.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the clip is missing or the split point is not inside it.
+    pub fn split_timeline_clip(
+        &mut self,
+        id: &str,
+        split_tick: u32,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.edit_timeline("Split clip", WorkspaceEditImpact::Timeline, |timeline| {
+            timeline.split_clip(id, split_tick)
+        })
+    }
+
     /// Deletes a timeline clip.
     ///
     /// # Errors
@@ -1495,6 +1510,30 @@ mod tests {
         assert!(redone.history.can_undo);
         assert!(!redone.history.can_redo);
         assert!(redone.is_dirty);
+    }
+
+    #[test]
+    fn records_a_clip_split_as_one_undoable_timeline_edit() {
+        let mut workspaces = Workspaces::new();
+        workspaces
+            .save_timeline_clip(None, "track-1", "Region", 0, 1_920, 0)
+            .expect("clip should save");
+
+        let split = workspaces
+            .split_timeline_clip("clip-1", 960)
+            .expect("clip should split");
+
+        assert_eq!(split.timeline.tracks[0].clips.len(), 2);
+        assert_eq!(split.history.undo_label.as_deref(), Some("Split clip"));
+        assert_eq!(
+            workspaces.latest_history_impact(),
+            WorkspaceEditImpact::Timeline
+        );
+
+        let undone = workspaces.undo().expect("split should undo");
+        assert_eq!(undone.timeline.tracks[0].clips.len(), 1);
+        assert_eq!(undone.timeline.tracks[0].clips[0].duration_ticks, 1_920);
+        assert_eq!(undone.history.redo_label.as_deref(), Some("Split clip"));
     }
 
     #[test]

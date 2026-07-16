@@ -218,6 +218,9 @@ export function ProjectTree({ categoryPaths, paths, rootPath, pinnedRoots }: Pro
     if (!treePath || row?.dataset.itemType === "folder") return;
     const relativePath = workspaceRelativeEntry(treePath, rootPath);
     if (!relativePath || !isAudioPath(relativePath)) return;
+    const focusedElement =
+      model.getFileTreeContainer()?.shadowRoot?.activeElement ?? document.activeElement;
+    if (focusedElement instanceof HTMLElement) focusedElement.blur();
     event.dataTransfer.setData(audioDragType, relativePath);
     event.dataTransfer.effectAllowed = "copyMove";
   }

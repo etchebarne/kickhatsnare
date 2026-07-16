@@ -241,6 +241,12 @@ export class CoreServer {
     return this.#request("workspace.setMixNodePosition", params);
   }
 
+  splitTimelineClip(
+    params: ParamsFor<"workspace.splitTimelineClip">,
+  ): Promise<ResultFor<"workspace.splitTimelineClip">> {
+    return this.#request("workspace.splitTimelineClip", params);
+  }
+
   undoWorkspace(): Promise<ResultFor<"workspace.undo">> {
     return this.#request("workspace.undo", {});
   }

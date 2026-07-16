@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { OverlayScrollArea } from "@/components/ui/overlay-scroll-area";
 import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
+import { useTimelineStore } from "@/stores/timeline-store";
 import { useTransportStore } from "@/stores/transport-store";
 import type { SaveTimelineClipParams, WorkspaceSnapshot } from "@shared/ipc";
 
@@ -48,8 +49,10 @@ export function TimelineEditor() {
   const deleteTimelineTrack = useAppStore((state) => state.deleteTimelineTrack);
   const saveTimelineClip = useAppStore((state) => state.saveTimelineClip);
   const deleteTimelineClip = useAppStore((state) => state.deleteTimelineClip);
+  const splitTimelineClip = useAppStore((state) => state.splitTimelineClip);
   const addAudioClip = useAppStore((state) => state.addAudioClip);
   const importAudioFiles = useAppStore((state) => state.importAudioFiles);
+  const tool = useTimelineStore((state) => state.tool);
   const seek = useTransportStore((state) => state.seek);
   const scrollContainer = useRef<HTMLDivElement>(null);
   const playheadMarker = useRef<HTMLDivElement>(null);
@@ -272,6 +275,10 @@ export function TimelineEditor() {
     void deleteTimelineClip(id);
   }
 
+  function splitClip(id: string, splitTick: number) {
+    return splitTimelineClip({ id, splitTick });
+  }
+
   function handleAudioDragOver(event: DragEvent<HTMLDivElement>) {
     if (
       !event.dataTransfer.types.includes(AUDIO_DRAG_TYPE) &&
@@ -475,9 +482,11 @@ export function TimelineEditor() {
                         : null
                     }
                     selected={clip.id === selectedClipId}
+                    tool={tool}
                     onSelect={setSelectedClipId}
                     onCommit={commitClip}
                     onDelete={removeClip}
+                    onSplit={splitClip}
                   />
                 ))}
               </div>

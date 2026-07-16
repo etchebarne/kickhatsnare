@@ -1,6 +1,7 @@
 import { useEffect, useRef, type PointerEvent } from "react";
 
 import { cn } from "@/lib/utils";
+import type { TimelineTool } from "@/stores/timeline-store";
 import type { SaveTimelineClipParams, WorkspaceSnapshot } from "@shared/ipc";
 
 import { ClipWaveform } from "./clip-waveform";
@@ -29,9 +30,11 @@ interface TimelineClipProps {
   gridTicks: number;
   sourceDurationTicks: number | null;
   selected: boolean;
+  tool: TimelineTool;
   onSelect(id: string): void;
   onCommit(params: SaveTimelineClipParams): Promise<boolean>;
   onDelete(id: string): void;
+  onSplit(id: string, splitTick: number): Promise<boolean>;
 }
 
 export function TimelineClip({
@@ -41,19 +44,23 @@ export function TimelineClip({
   gridTicks,
   sourceDurationTicks,
   selected,
+  tool,
   onSelect,
   onCommit,
   onDelete,
+  onSplit,
 }: TimelineClipProps) {
   const element = useRef<HTMLDivElement>(null);
   const drag = useRef<DragState | null>(null);
   const draft = useRef<ClipDraft | null>(null);
   const animationFrame = useRef<number | null>(null);
   const highlightedLane = useRef<HTMLElement | null>(null);
+  const cutPreview = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     resetVisual();
-  }, [clip.durationTicks, clip.startTick, pixelsPerTick, trackId]);
+    hideCutPreview();
+  }, [clip.durationTicks, clip.startTick, pixelsPerTick, tool, trackId]);
 
   useEffect(() => {
     return () => {
@@ -76,6 +83,27 @@ export function TimelineClip({
   function snap(tick: number, enabled: boolean) {
     const rounded = Math.round(tick);
     return enabled ? Math.round(rounded / gridTicks) * gridTicks : rounded;
+  }
+
+  function cutTickAt(clientX: number, lane: HTMLElement, snapEnabled: boolean) {
+    return snap((clientX - lane.getBoundingClientRect().left) / pixelsPerTick, snapEnabled);
+  }
+
+  function hideCutPreview() {
+    if (cutPreview.current) cutPreview.current.style.opacity = "0";
+  }
+
+  function renderCutPreview(event: PointerEvent<HTMLDivElement>) {
+    const marker = cutPreview.current;
+    const lane = event.currentTarget.closest<HTMLElement>("[data-timeline-track-id]");
+    if (!marker || !lane) return;
+    const splitTick = cutTickAt(event.clientX, lane, !event.altKey);
+    if (splitTick <= clip.startTick || splitTick >= clip.startTick + clip.durationTicks) {
+      hideCutPreview();
+      return;
+    }
+    marker.style.left = `${(splitTick - clip.startTick) * pixelsPerTick}px`;
+    marker.style.opacity = "1";
   }
 
   function draftAt(active: DragState, clientX: number, snapEnabled: boolean): ClipDraft {
@@ -152,6 +180,16 @@ export function TimelineClip({
     if (event.button !== 0) return;
     const lane = event.currentTarget.closest<HTMLElement>("[data-timeline-track-id]");
     if (!lane) return;
+    if (tool === "cut") {
+      event.preventDefault();
+      event.stopPropagation();
+      const splitTick = cutTickAt(event.clientX, lane, !event.altKey);
+      if (splitTick <= clip.startTick || splitTick >= clip.startTick + clip.durationTicks) return;
+      hideCutPreview();
+      onSelect(clip.id);
+      void onSplit(clip.id, splitTick);
+      return;
+    }
     const edge = (event.target as HTMLElement).closest<HTMLElement>("[data-edge]")?.dataset.edge;
     const mode: DragMode = edge === "start" ? "trim-start" : edge === "end" ? "trim-end" : "move";
     event.preventDefault();
@@ -175,6 +213,10 @@ export function TimelineClip({
   }
 
   function handlePointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (tool === "cut") {
+      renderCutPreview(event);
+      return;
+    }
     const active = drag.current;
     if (!active) return;
 
@@ -227,6 +269,7 @@ export function TimelineClip({
   }
 
   function cancelDrag(event: PointerEvent<HTMLDivElement>) {
+    hideCutPreview();
     if (!drag.current) return;
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
@@ -247,6 +290,7 @@ export function TimelineClip({
       className={cn(
         "group absolute top-2 min-w-4 touch-none overflow-hidden rounded-sm border shadow-sm outline-none data-[dragging]:cursor-grabbing",
         "focus-visible:ring-2 focus-visible:ring-ring/70",
+        tool === "cut" ? "cursor-crosshair" : "cursor-grab",
         selected
           ? "border-primary-foreground/30 bg-primary text-primary-foreground"
           : "border-border bg-secondary text-secondary-foreground hover:border-foreground/30",
@@ -258,6 +302,7 @@ export function TimelineClip({
       }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
+      onPointerLeave={hideCutPreview}
       onPointerUp={finishDrag}
       onPointerCancel={cancelDrag}
       onFocus={() => onSelect(clip.id)}
@@ -274,10 +319,19 @@ export function TimelineClip({
           sourceDurationTicks={sourceDurationTicks}
         />
       ) : null}
-      <div
-        data-edge="start"
-        className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize border-l-2 border-transparent group-hover:border-current/40"
-      />
+      {tool === "cut" ? (
+        <div
+          ref={cutPreview}
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-destructive opacity-0 shadow-sm"
+        />
+      ) : null}
+      {tool === "select" ? (
+        <div
+          data-edge="start"
+          className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize border-l-2 border-transparent group-hover:border-current/40"
+        />
+      ) : null}
       <div className="pointer-events-none flex h-full flex-col justify-between px-3 py-2">
         <span className="truncate text-xs font-medium">{clip.name}</span>
         <span className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-55">
@@ -286,10 +340,12 @@ export function TimelineClip({
             : "Empty region"}
         </span>
       </div>
-      <div
-        data-edge="end"
-        className="absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize border-r-2 border-transparent group-hover:border-current/40"
-      />
+      {tool === "select" ? (
+        <div
+          data-edge="end"
+          className="absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize border-r-2 border-transparent group-hover:border-current/40"
+        />
+      ) : null}
     </div>
   );
 }
