@@ -10,6 +10,7 @@ import type {
   SetTimelineSettingsParams,
   SetMasterMixParams,
   SetMixNodePositionParams,
+  SetTimelineClipPropertiesParams,
   SplitTimelineClipParams,
   WorkspaceSnapshot,
 } from "@shared/ipc";
@@ -45,6 +46,7 @@ interface AppState {
   setTimelineSettings(params: SetTimelineSettingsParams): Promise<boolean>;
   setMasterMix(params: SetMasterMixParams): Promise<boolean>;
   setMixNodePosition(params: SetMixNodePositionParams): Promise<boolean>;
+  setTimelineClipProperties(params: SetTimelineClipPropertiesParams): Promise<boolean>;
   splitTimelineClip(params: SplitTimelineClipParams): Promise<boolean>;
   undo(): Promise<boolean>;
 }
@@ -144,6 +146,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   async setMixNodePosition(params) {
     return updateWorkspace(set, () => window.kickHatSnare.setMixNodePosition(params));
+  },
+  async setTimelineClipProperties(params) {
+    return updateWorkspace(set, () => window.kickHatSnare.setTimelineClipProperties(params));
   },
   async splitTimelineClip(params) {
     return updateWorkspace(set, () => window.kickHatSnare.splitTimelineClip(params));

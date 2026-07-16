@@ -17,6 +17,7 @@ mod save_timeline_clip;
 mod save_timeline_track;
 mod set_master_mix;
 mod set_mix_node_position;
+mod set_timeline_clip_properties;
 mod set_timeline_settings;
 mod split_timeline_clip;
 mod undo;
@@ -40,6 +41,9 @@ pub use save_timeline_clip::{SaveTimelineClip, SaveTimelineClipParams};
 pub use save_timeline_track::{SaveTimelineTrack, SaveTimelineTrackParams};
 pub use set_master_mix::{SetMasterMix, SetMasterMixParams};
 pub use set_mix_node_position::{SetMixNodePosition, SetMixNodePositionParams};
+pub use set_timeline_clip_properties::{
+    SetTimelineClipProperties, SetTimelineClipPropertiesParams,
+};
 pub use set_timeline_settings::{SetTimelineSettings, SetTimelineSettingsParams};
 pub use split_timeline_clip::{SplitTimelineClip, SplitTimelineClipParams};
 pub use undo::{UndoWorkspace, UndoWorkspaceParams};
@@ -187,11 +191,35 @@ pub struct TimelineClip {
     pub start_tick: u32,
     pub duration_ticks: u32,
     pub source_offset_ticks: u32,
+    pub source_duration_ticks: u32,
     pub source_path: Option<String>,
     pub source_sample_rate: u32,
     pub source_channels: u16,
     pub source_duration_seconds: f64,
     pub waveform: Vec<f32>,
+    #[ts(inline)]
+    pub stretch_mode: ClipStretchMode,
+    pub gain_db: f64,
+    pub pan: f64,
+    pub pitch_semitones: f64,
+    pub tempo_percent: f64,
+    pub is_unique: bool,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum ClipStretchMode {
+    Resample,
+    Stretch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub enum ClipResizeMode {
+    Trim,
+    Stretch,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
@@ -231,6 +259,7 @@ pub(crate) fn methods() -> Vec<ContractMethod> {
         describe::<SetTimelineSettings>(),
         describe::<SetMasterMix>(),
         describe::<SetMixNodePosition>(),
+        describe::<SetTimelineClipProperties>(),
         describe::<SplitTimelineClip>(),
         describe::<UndoWorkspace>(),
     ]

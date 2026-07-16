@@ -1,3 +1,6 @@
+import { Scissors, UnfoldHorizontal } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
 import {
   InputGroup,
   InputGroupAddon,
@@ -12,11 +15,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useAppStore } from "@/stores/app-store";
+import { useTimelineStore } from "@/stores/timeline-store";
 import type { SetTimelineSettingsParams } from "@shared/ipc";
 
-export function TimelineHeaderControls() {
+export function TimelineHeaderControls({
+  showResizeControls = true,
+}: {
+  showResizeControls?: boolean;
+}) {
   const workspace = useAppStore((state) => state.workspace);
   const setTimelineSettings = useAppStore((state) => state.setTimelineSettings);
+  const resizeMode = useTimelineStore((state) => state.resizeMode);
+  const setResizeMode = useTimelineStore((state) => state.setResizeMode);
 
   if (!workspace) return null;
   const { timeline } = workspace;
@@ -110,6 +120,32 @@ export function TimelineHeaderControls() {
           </SelectContent>
         </Select>
       </div>
+      {showResizeControls ? (
+        <div
+          className="flex items-center gap-1 border-l border-border pl-3"
+          role="group"
+          aria-label="Clip resize mode"
+        >
+          <Button
+            size="sm"
+            variant={resizeMode === "trim" ? "secondary" : "ghost"}
+            aria-pressed={resizeMode === "trim"}
+            title="Cut audio when resizing clips"
+            onClick={() => setResizeMode("trim")}
+          >
+            <Scissors /> Cut
+          </Button>
+          <Button
+            size="sm"
+            variant={resizeMode === "stretch" ? "secondary" : "ghost"}
+            aria-pressed={resizeMode === "stretch"}
+            title="Fit audio by stretching clips"
+            onClick={() => setResizeMode("stretch")}
+          >
+            <UnfoldHorizontal /> Fit
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

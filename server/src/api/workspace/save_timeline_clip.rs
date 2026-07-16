@@ -2,7 +2,7 @@ use kickhatsnare_core::workspace::Workspaces;
 use kickhatsnare_protocol::{ErrorCode, workspace::SaveTimelineClipParams};
 use serde_json::Value;
 
-use super::{ApiError, core_error, serialize_snapshot};
+use super::{ApiError, core_error, deserialize_clip_resize_mode, serialize_snapshot};
 
 pub(super) fn handle(params: &Value, workspaces: &mut Workspaces) -> Result<Value, ApiError> {
     let params = serde_json::from_value::<SaveTimelineClipParams>(params.clone())
@@ -15,6 +15,8 @@ pub(super) fn handle(params: &Value, workspaces: &mut Workspaces) -> Result<Valu
             params.start_tick,
             params.duration_ticks,
             params.source_offset_ticks,
+            params.source_duration_ticks,
+            deserialize_clip_resize_mode(params.resize_mode),
         )
         .map_err(|error| core_error(&error))
         .and_then(serialize_snapshot)

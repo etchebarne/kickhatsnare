@@ -2,7 +2,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use ts_rs::TS;
 
-use super::WorkspaceSnapshot;
+use super::{ClipResizeMode, WorkspaceSnapshot};
 use crate::IpcMethod;
 
 pub struct SaveTimelineClip;
@@ -23,4 +23,7 @@ pub struct SaveTimelineClipParams {
     pub start_tick: u32,
     pub duration_ticks: u32,
     pub source_offset_ticks: u32,
+    pub source_duration_ticks: u32,
+    #[ts(inline)]
+    pub resize_mode: ClipResizeMode,
 }

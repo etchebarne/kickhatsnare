@@ -18,10 +18,13 @@ pub use mix_graph::{
     MixPortSnapshot, MixSignalType,
 };
 use timeline::Timeline;
-pub use timeline::{GridDivision, TimelineClipSnapshot, TimelineSnapshot, TimelineTrackSnapshot};
+pub use timeline::{
+    ClipResizeMode, ClipStretchMode, GridDivision, TimelineClipSnapshot, TimelineSnapshot,
+    TimelineTrackSnapshot,
+};
 
 const PROJECT_FILE_NAME: &str = "project.khs";
-const PROJECT_FORMAT_VERSION: u32 = 4;
+const PROJECT_FORMAT_VERSION: u32 = 5;
 const OLDEST_SUPPORTED_PROJECT_FORMAT_VERSION: u32 = 1;
 const MAX_HISTORY_ENTRIES: usize = 200;
 
@@ -121,6 +124,11 @@ pub struct PlaybackClip {
     pub start_tick: u32,
     pub duration_ticks: u32,
     pub source_offset_ticks: u32,
+    pub source_duration_ticks: u32,
+    pub stretch_mode: ClipStretchMode,
+    pub gain_db: f64,
+    pub pan: f64,
+    pub pitch_semitones: f64,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -395,6 +403,11 @@ impl Workspaces {
                                     start_tick: clip.start_tick,
                                     duration_ticks: clip.duration_ticks,
                                     source_offset_ticks: clip.source_offset_ticks,
+                                    source_duration_ticks: clip.source_duration_ticks,
+                                    stretch_mode: clip.stretch_mode,
+                                    gain_db: clip.gain_db,
+                                    pan: clip.pan,
+                                    pitch_semitones: clip.pitch_semitones,
                                 })
                         })
                     })
@@ -909,6 +922,8 @@ impl Workspaces {
         start_tick: u32,
         duration_ticks: u32,
         source_offset_ticks: u32,
+        source_duration_ticks: u32,
+        resize_mode: ClipResizeMode,
     ) -> Result<WorkspaceSnapshot, CoreError> {
         let label = if id.is_some() {
             "Edit clip"
@@ -923,8 +938,47 @@ impl Workspaces {
                 start_tick,
                 duration_ticks,
                 source_offset_ticks,
+                source_duration_ticks,
+                resize_mode,
             )
         })
+    }
+
+    /// Updates audio behavior shared by clip instances from the same source.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the clip is missing or a property is outside supported bounds.
+    #[allow(clippy::too_many_arguments)]
+    pub fn set_timeline_clip_properties(
+        &mut self,
+        id: &str,
+        stretch_mode: ClipStretchMode,
+        gain_db: f64,
+        pan: f64,
+        pitch_semitones: f64,
+        tempo_percent: Option<f64>,
+        make_unique: bool,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        self.edit_timeline(
+            if make_unique {
+                "Make clip unique"
+            } else {
+                "Edit clip properties"
+            },
+            WorkspaceEditImpact::Timeline,
+            |timeline| {
+                timeline.set_clip_properties(
+                    id,
+                    stretch_mode,
+                    gain_db,
+                    pan,
+                    pitch_semitones,
+                    tempo_percent,
+                    make_unique,
+                )
+            },
+        )
     }
 
     /// Splits a timeline clip into two contiguous clips.
@@ -1446,7 +1500,7 @@ mod tests {
     use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::{GridDivision, PROJECT_FILE_NAME, WorkspaceEditImpact, Workspaces};
+    use super::{ClipResizeMode, GridDivision, PROJECT_FILE_NAME, WorkspaceEditImpact, Workspaces};
 
     #[test]
     fn starts_with_an_empty_unsaved_project_tree() {
@@ -1516,7 +1570,16 @@ mod tests {
     fn records_a_clip_split_as_one_undoable_timeline_edit() {
         let mut workspaces = Workspaces::new();
         workspaces
-            .save_timeline_clip(None, "track-1", "Region", 0, 1_920, 0)
+            .save_timeline_clip(
+                None,
+                "track-1",
+                "Region",
+                0,
+                1_920,
+                0,
+                1_920,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should save");
 
         let split = workspaces
@@ -1666,7 +1729,16 @@ mod tests {
         assert_eq!(workspaces.latest_history_impact(), WorkspaceEditImpact::Mix);
 
         workspaces
-            .save_timeline_clip(None, "track-1", "Region", 0, 960, 0)
+            .save_timeline_clip(
+                None,
+                "track-1",
+                "Region",
+                0,
+                960,
+                0,
+                960,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should save");
         workspaces.undo().expect("clip should undo");
         assert_eq!(
@@ -1704,7 +1776,7 @@ mod tests {
             &fs::read_to_string(project_file).expect("project file should be readable"),
         )
         .expect("project should contain JSON");
-        assert_eq!(project["formatVersion"], 4);
+        assert_eq!(project["formatVersion"], 5);
         assert_eq!(project["name"], "First Beat");
         assert_eq!(project["timeline"]["bpm"], 120.0);
     }
@@ -1731,7 +1803,7 @@ mod tests {
     fn rejects_an_unsupported_project_version_without_replacing_the_session() {
         let parent = tempdir().expect("temporary directory should be created");
         let project_file = parent.path().join(PROJECT_FILE_NAME);
-        fs::write(&project_file, r#"{"formatVersion":5,"name":"Future"}"#)
+        fs::write(&project_file, r#"{"formatVersion":6,"name":"Future"}"#)
             .expect("project should be created");
         let mut workspaces = Workspaces::new();
 
@@ -1741,7 +1813,7 @@ mod tests {
 
         assert_eq!(
             error.to_string(),
-            "unsupported project format version 5; expected 1 through 4"
+            "unsupported project format version 6; expected 1 through 5"
         );
         assert_eq!(
             workspaces.snapshot().expect("snapshot should succeed").name,
@@ -1928,7 +2000,7 @@ mod tests {
             &fs::read_to_string(project_file).expect("project should be readable"),
         )
         .expect("project should contain JSON");
-        assert_eq!(saved["formatVersion"], 4);
+        assert_eq!(saved["formatVersion"], 5);
         assert!(saved["timeline"].get("masterNodeX").is_none());
         assert!(saved["timeline"]["tracks"][0].get("isConnected").is_none());
         assert!(saved["timeline"]["mixGraph"].is_object());
@@ -1946,7 +2018,16 @@ mod tests {
             .save_timeline_track(None, "Drums", false, false, 0.0, 0.0)
             .expect("track should save");
         workspaces
-            .save_timeline_clip(None, "track-11", "Pattern", 960, 1_920, 0)
+            .save_timeline_clip(
+                None,
+                "track-11",
+                "Pattern",
+                960,
+                1_920,
+                0,
+                1_920,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should save");
         let saved = workspaces.save_as(&root).expect("project should save");
 

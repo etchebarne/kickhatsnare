@@ -50,9 +50,11 @@ export function TimelineEditor() {
   const saveTimelineClip = useAppStore((state) => state.saveTimelineClip);
   const deleteTimelineClip = useAppStore((state) => state.deleteTimelineClip);
   const splitTimelineClip = useAppStore((state) => state.splitTimelineClip);
+  const setTimelineClipProperties = useAppStore((state) => state.setTimelineClipProperties);
   const addAudioClip = useAppStore((state) => state.addAudioClip);
   const importAudioFiles = useAppStore((state) => state.importAudioFiles);
   const tool = useTimelineStore((state) => state.tool);
+  const resizeMode = useTimelineStore((state) => state.resizeMode);
   const seek = useTransportStore((state) => state.seek);
   const scrollContainer = useRef<HTMLDivElement>(null);
   const playheadMarker = useRef<HTMLDivElement>(null);
@@ -483,8 +485,10 @@ export function TimelineEditor() {
                     }
                     selected={clip.id === selectedClipId}
                     tool={tool}
+                    resizeMode={resizeMode}
                     onSelect={setSelectedClipId}
                     onCommit={commitClip}
+                    onSetProperties={setTimelineClipProperties}
                     onDelete={removeClip}
                     onSplit={splitClip}
                   />
@@ -504,9 +508,12 @@ function isAudioFile(file: File) {
 }
 
 function isEditable(target: EventTarget | null) {
+  if (document.querySelector('[data-slot="dialog-content"][data-state="open"]')) return true;
   return (
     target instanceof HTMLElement &&
-    (target.isContentEditable || ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName))
+    (target.isContentEditable ||
+      ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) ||
+      target.closest('[data-slot="dialog-content"]') !== null)
   );
 }
 

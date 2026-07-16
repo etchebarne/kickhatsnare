@@ -17,7 +17,7 @@ use rodio::{Decoder, Source};
 
 use crate::{
     CoreError,
-    workspace::{PlaybackClip, PlaybackProject},
+    workspace::{ClipStretchMode, PlaybackClip, PlaybackProject},
 };
 
 pub const NO_SEEK: u64 = u64::MAX;
@@ -29,6 +29,7 @@ const DECODE_REQUEST_CAPACITY: usize = 64;
 const RETIRED_PLAN_CAPACITY: usize = 8;
 pub const RENDER_PLAN_UPDATE_CAPACITY: usize = 8;
 const PREWARM_TIMEOUT: Duration = Duration::from_millis(250);
+const STRETCH_GRAIN_HOP_SECONDS: f64 = 0.02;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -95,6 +96,12 @@ pub struct RenderClip {
     start_frame: u64,
     end_frame: u64,
     source_offset_seconds: f64,
+    source_duration_seconds: f64,
+    source_rate: f64,
+    stretch_mode: ClipStretchMode,
+    pitch_ratio: f64,
+    left_gain: f32,
+    right_gain: f32,
     fade_in_at_start: bool,
     fade_out_at_end: bool,
     fade_in_on_activation: bool,
@@ -170,6 +177,14 @@ impl RenderPlan {
                             sample_rate,
                         );
                         duration_frames = duration_frames.max(end_frame);
+                        let timeline_duration_seconds =
+                            frame_to_seconds(end_frame.saturating_sub(start_frame), sample_rate);
+                        let source_duration_seconds = tick_to_seconds(
+                            clip.source_duration_ticks,
+                            project.bpm,
+                            project.ticks_per_quarter,
+                        );
+                        let (left_gain, right_gain) = channel_gains(clip.gain_db, clip.pan);
                         RenderClip {
                             id: clip.id.clone(),
                             source_path: clip.source_path.clone(),
@@ -180,6 +195,12 @@ impl RenderPlan {
                                 project.bpm,
                                 project.ticks_per_quarter,
                             ),
+                            source_duration_seconds,
+                            source_rate: source_duration_seconds / timeline_duration_seconds,
+                            stretch_mode: clip.stretch_mode,
+                            pitch_ratio: 2.0_f64.powf(clip.pitch_semitones / 12.0),
+                            left_gain,
+                            right_gain,
                             fade_in_at_start: !track
                                 .clips
                                 .iter()
@@ -229,6 +250,12 @@ impl RenderPlan {
                         && previous.end_frame == clip.end_frame
                         && previous.source_offset_seconds.to_bits()
                             == clip.source_offset_seconds.to_bits()
+                        && previous.source_duration_seconds.to_bits()
+                            == clip.source_duration_seconds.to_bits()
+                        && previous.stretch_mode == clip.stretch_mode
+                        && previous.pitch_ratio.to_bits() == clip.pitch_ratio.to_bits()
+                        && previous.left_gain.to_bits() == clip.left_gain.to_bits()
+                        && previous.right_gain.to_bits() == clip.right_gain.to_bits()
                 });
         }
     }
@@ -331,15 +358,16 @@ impl PreparedRenderState {
         for (track, streams) in self.plan.tracks.iter().zip(&mut self.streams) {
             for (clip, stream) in track.clips.iter().zip(streams) {
                 if timeline_frame >= clip.start_frame && timeline_frame < clip.end_frame {
-                    let seconds =
-                        frame_to_seconds(timeline_frame - clip.start_frame, self.plan.sample_rate)
-                            + clip.source_offset_seconds;
-                    ready &= stream.load_frame(seconds * f64::from(stream.sample_rate()));
+                    ready &= clip_frames_ready(
+                        clip,
+                        stream,
+                        timeline_frame - clip.start_frame,
+                        self.plan.sample_rate,
+                    );
                 } else if clip.start_frame >= timeline_frame
                     && clip.start_frame - timeline_frame <= u64::from(self.plan.sample_rate)
                 {
-                    ready &= stream
-                        .load_frame(clip.source_offset_seconds * f64::from(stream.sample_rate()));
+                    ready &= clip_frames_ready(clip, stream, 0, self.plan.sample_rate);
                 }
             }
         }
@@ -491,32 +519,36 @@ impl TimelineSource {
             for (clip, stream) in track.clips.iter().zip(streams) {
                 if frame < clip.start_frame {
                     if clip.start_frame - frame <= u64::from(self.state.plan.sample_rate) {
-                        stream.request_frame(
-                            clip.source_offset_seconds * f64::from(stream.sample_rate()),
-                        );
+                        request_clip_frames(clip, stream, 0, self.state.plan.sample_rate);
                     }
                     continue;
                 }
                 if frame >= clip.end_frame {
                     continue;
                 }
-                let seconds =
-                    frame_to_seconds(frame - clip.start_frame, self.state.plan.sample_rate)
-                        + clip.source_offset_seconds;
-                let source_frame = seconds * f64::from(stream.sample_rate());
                 if !audible {
-                    stream.request_frame(source_frame);
+                    request_clip_frames(
+                        clip,
+                        stream,
+                        frame - clip.start_frame,
+                        self.state.plan.sample_rate,
+                    );
                     continue;
                 }
-                if let Some([left, right]) = stream.sample_at(source_frame) {
+                if let Some([left, right]) = sample_clip(
+                    clip,
+                    stream,
+                    frame - clip.start_frame,
+                    self.state.plan.sample_rate,
+                ) {
                     let envelope = clip_envelope(
                         clip,
                         frame,
                         self.state.activation_frame,
                         self.state.plan.sample_rate,
                     );
-                    output[0] += left * left_gain * envelope;
-                    output[1] += right * right_gain * envelope;
+                    output[0] += left * clip.left_gain * left_gain * envelope;
+                    output[1] += right * clip.right_gain * right_gain * envelope;
                 } else if self.state.stall_on_miss {
                     frame_ready = false;
                 }
@@ -555,8 +587,13 @@ struct StreamCursor {
     audio: Arc<StreamedAudio>,
     block_index: Option<u64>,
     block: Option<Arc<Vec<[f32; 2]>>>,
-    requested_block: Option<u64>,
-    request_misses: u16,
+    pending_requests: [Option<PendingBlockRequest>; 2],
+}
+
+#[derive(Clone, Copy)]
+struct PendingBlockRequest {
+    block_index: u64,
+    misses: u16,
 }
 
 impl StreamCursor {
@@ -565,8 +602,7 @@ impl StreamCursor {
             audio,
             block_index: None,
             block: None,
-            requested_block: None,
-            request_misses: 0,
+            pending_requests: [None; 2],
         }
     }
 
@@ -621,21 +657,22 @@ impl StreamCursor {
             return true;
         }
         let Some(block) = self.audio.cached_block(block_index) else {
-            if self.requested_block == Some(block_index) {
-                self.request_misses = self.request_misses.saturating_add(1);
-                if self.request_misses < 256 {
+            if let Some(position) = self.pending_request_position(block_index) {
+                let pending = self.pending_requests[position]
+                    .as_mut()
+                    .expect("pending request position should be occupied");
+                pending.misses = pending.misses.saturating_add(1);
+                if pending.misses < 256 {
                     return false;
                 }
-                self.requested_block = None;
-                self.request_misses = 0;
+                self.pending_requests[position] = None;
             }
             self.request_block(block_index);
             return false;
         };
-        if self.requested_block == Some(block_index) {
-            self.requested_block = None;
+        if let Some(position) = self.pending_request_position(block_index) {
+            self.pending_requests[position] = None;
         }
-        self.request_misses = 0;
         self.block_index = Some(block_index);
         self.block = Some(block);
         true
@@ -661,11 +698,43 @@ impl StreamCursor {
     }
 
     fn request_block(&mut self, block_index: u64) {
-        if self.block_index == Some(block_index) || self.requested_block == Some(block_index) {
+        if self.block_index == Some(block_index)
+            || self.pending_request_position(block_index).is_some()
+        {
             return;
         }
+        let position =
+            if let Some(position) = self.pending_requests.iter().position(Option::is_none) {
+                position
+            } else {
+                self.clear_completed_requests();
+                let Some(position) = self.pending_requests.iter().position(Option::is_none) else {
+                    return;
+                };
+                position
+            };
         if self.audio.request_block(block_index) {
-            self.requested_block = Some(block_index);
+            self.pending_requests[position] = Some(PendingBlockRequest {
+                block_index,
+                misses: 0,
+            });
+        }
+    }
+
+    fn pending_request_position(&self, block_index: u64) -> Option<usize> {
+        self.pending_requests
+            .iter()
+            .position(|pending| pending.is_some_and(|pending| pending.block_index == block_index))
+    }
+
+    fn clear_completed_requests(&mut self) {
+        for pending in &mut self.pending_requests {
+            if pending
+                .as_ref()
+                .is_some_and(|pending| self.audio.cached_block(pending.block_index).is_some())
+            {
+                *pending = None;
+            }
         }
     }
 }
@@ -900,8 +969,126 @@ pub fn seconds_to_ticks(seconds: f64, bpm: f64, ticks_per_quarter: u32) -> u32 {
 fn clips_are_source_contiguous(left: &PlaybackClip, right: &PlaybackClip) -> bool {
     left.source_path == right.source_path
         && left.start_tick.checked_add(left.duration_ticks) == Some(right.start_tick)
-        && left.source_offset_ticks.checked_add(left.duration_ticks)
+        && left
+            .source_offset_ticks
+            .checked_add(left.source_duration_ticks)
             == Some(right.source_offset_ticks)
+        && left.stretch_mode == right.stretch_mode
+        && left.pitch_semitones.to_bits() == right.pitch_semitones.to_bits()
+        && left.gain_db.to_bits() == right.gain_db.to_bits()
+        && left.pan.to_bits() == right.pan.to_bits()
+        && u64::from(left.source_duration_ticks) * u64::from(right.duration_ticks)
+            == u64::from(right.source_duration_ticks) * u64::from(left.duration_ticks)
+}
+
+fn clip_source_seconds(clip: &RenderClip, local_frame: u64, sample_rate: u32) -> f64 {
+    clip.source_offset_seconds + frame_to_seconds(local_frame, sample_rate) * clip.source_rate
+}
+
+fn sample_clip(
+    clip: &RenderClip,
+    stream: &mut StreamCursor,
+    local_frame: u64,
+    output_sample_rate: u32,
+) -> Option<[f32; 2]> {
+    if clip.stretch_mode == ClipStretchMode::Resample || clip_uses_unity_stretch(clip) {
+        let source_seconds = clip_source_seconds(clip, local_frame, output_sample_rate);
+        return sample_clip_at_seconds(clip, stream, source_seconds);
+    }
+
+    let mut mixed = [0.0_f32; 2];
+    for (source_seconds, weight) in stretch_grains(clip, local_frame, output_sample_rate) {
+        if weight <= f32::EPSILON {
+            continue;
+        }
+        let sample = sample_clip_at_seconds(clip, stream, source_seconds)?;
+        mixed[0] += sample[0] * weight;
+        mixed[1] += sample[1] * weight;
+    }
+    Some(mixed)
+}
+
+fn clip_frames_ready(
+    clip: &RenderClip,
+    stream: &mut StreamCursor,
+    local_frame: u64,
+    output_sample_rate: u32,
+) -> bool {
+    let mut ready = true;
+    for source_seconds in clip_source_frames(clip, local_frame, output_sample_rate) {
+        ready &= stream.load_frame(source_seconds * f64::from(stream.sample_rate()));
+    }
+    ready
+}
+
+fn request_clip_frames(
+    clip: &RenderClip,
+    stream: &mut StreamCursor,
+    local_frame: u64,
+    output_sample_rate: u32,
+) {
+    for source_seconds in clip_source_frames(clip, local_frame, output_sample_rate) {
+        stream.request_frame(source_seconds * f64::from(stream.sample_rate()));
+    }
+}
+
+fn clip_source_frames(
+    clip: &RenderClip,
+    local_frame: u64,
+    output_sample_rate: u32,
+) -> impl Iterator<Item = f64> {
+    let frames = if clip.stretch_mode == ClipStretchMode::Stretch && !clip_uses_unity_stretch(clip)
+    {
+        let grains = stretch_grains(clip, local_frame, output_sample_rate);
+        [
+            Some(grains[0].0),
+            (grains[1].1 > f32::EPSILON).then_some(grains[1].0),
+        ]
+    } else {
+        [
+            Some(clip_source_seconds(clip, local_frame, output_sample_rate)),
+            None,
+        ]
+    };
+    frames.into_iter().flatten().filter(|source_seconds| {
+        *source_seconds >= clip.source_offset_seconds
+            && *source_seconds < clip.source_offset_seconds + clip.source_duration_seconds
+    })
+}
+
+fn clip_uses_unity_stretch(clip: &RenderClip) -> bool {
+    (clip.source_rate - 1.0).abs() < 1e-6 && (clip.pitch_ratio - 1.0).abs() < 1e-6
+}
+
+#[allow(clippy::cast_possible_truncation)]
+fn stretch_grains(clip: &RenderClip, local_frame: u64, output_sample_rate: u32) -> [(f64, f32); 2] {
+    let output_seconds = frame_to_seconds(local_frame, output_sample_rate);
+    let grain_position = output_seconds / STRETCH_GRAIN_HOP_SECONDS;
+    let grain_index = grain_position.floor();
+    let phase = grain_position - grain_index;
+    let blend = (phase * phase * (3.0 - 2.0 * phase)) as f32;
+    let source_seconds = |index: f64| {
+        let output_center = index * STRETCH_GRAIN_HOP_SECONDS;
+        let source_center = clip.source_offset_seconds + output_center * clip.source_rate;
+        source_center + (output_seconds - output_center) * clip.pitch_ratio
+    };
+    [
+        (source_seconds(grain_index), 1.0 - blend),
+        (source_seconds(grain_index + 1.0), blend),
+    ]
+}
+
+fn sample_clip_at_seconds(
+    clip: &RenderClip,
+    stream: &mut StreamCursor,
+    source_seconds: f64,
+) -> Option<[f32; 2]> {
+    if source_seconds < clip.source_offset_seconds
+        || source_seconds >= clip.source_offset_seconds + clip.source_duration_seconds
+    {
+        return Some([0.0; 2]);
+    }
+    stream.sample_at(source_seconds * f64::from(stream.sample_rate()))
 }
 
 fn frame_to_seconds(frame: u64, sample_rate: u32) -> f64 {
@@ -973,7 +1160,7 @@ mod tests {
 
     use crossbeam_queue::ArrayQueue;
 
-    use crate::workspace::{PlaybackClip, PlaybackProject, PlaybackTrack};
+    use crate::workspace::{ClipStretchMode, PlaybackClip, PlaybackProject, PlaybackTrack};
 
     use super::{
         AudioStreams, NO_SEEK, PlaybackState, PreparedRenderState, RenderPlan, TimelineSource,
@@ -1008,6 +1195,11 @@ mod tests {
                         start_tick: 0,
                         duration_ticks: 960,
                         source_offset_ticks: 0,
+                        source_duration_ticks: 960,
+                        stretch_mode: ClipStretchMode::Resample,
+                        gain_db: 0.0,
+                        pan: 0.0,
+                        pitch_semitones: 0.0,
                     },
                     PlaybackClip {
                         id: "clip-2".to_owned(),
@@ -1015,6 +1207,11 @@ mod tests {
                         start_tick: 960,
                         duration_ticks: 960,
                         source_offset_ticks: 960,
+                        source_duration_ticks: 960,
+                        stretch_mode: ClipStretchMode::Resample,
+                        gain_db: 0.0,
+                        pan: 0.0,
+                        pitch_semitones: 0.0,
                     },
                 ],
             }],

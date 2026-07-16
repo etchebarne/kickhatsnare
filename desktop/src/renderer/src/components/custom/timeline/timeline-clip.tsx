@@ -1,9 +1,26 @@
-import { useEffect, useRef, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent } from "react";
+import { Ellipsis } from "lucide-react";
 
+import { Button } from "@/components/ui/button";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuRadioGroup,
+  ContextMenuRadioItem,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { cn } from "@/lib/utils";
-import type { TimelineTool } from "@/stores/timeline-store";
-import type { SaveTimelineClipParams, WorkspaceSnapshot } from "@shared/ipc";
+import type { TimelineResizeMode, TimelineTool } from "@/stores/timeline-store";
+import type {
+  SaveTimelineClipParams,
+  SetTimelineClipPropertiesParams,
+  WorkspaceSnapshot,
+} from "@shared/ipc";
 
+import { AudioClipSettingsDialog } from "./audio-clip-settings-dialog";
 import { ClipWaveform } from "./clip-waveform";
 
 type TimelineClipData = WorkspaceSnapshot["timeline"]["tracks"][number]["clips"][number];
@@ -13,6 +30,7 @@ interface ClipDraft {
   startTick: number;
   durationTicks: number;
   sourceOffsetTicks: number;
+  sourceDurationTicks: number;
 }
 
 interface DragState extends ClipDraft {
@@ -31,8 +49,10 @@ interface TimelineClipProps {
   sourceDurationTicks: number | null;
   selected: boolean;
   tool: TimelineTool;
+  resizeMode: TimelineResizeMode;
   onSelect(id: string): void;
   onCommit(params: SaveTimelineClipParams): Promise<boolean>;
+  onSetProperties(params: SetTimelineClipPropertiesParams): Promise<boolean>;
   onDelete(id: string): void;
   onSplit(id: string, splitTick: number): Promise<boolean>;
 }
@@ -45,8 +65,10 @@ export function TimelineClip({
   sourceDurationTicks,
   selected,
   tool,
+  resizeMode,
   onSelect,
   onCommit,
+  onSetProperties,
   onDelete,
   onSplit,
 }: TimelineClipProps) {
@@ -56,6 +78,7 @@ export function TimelineClip({
   const animationFrame = useRef<number | null>(null);
   const highlightedLane = useRef<HTMLElement | null>(null);
   const cutPreview = useRef<HTMLDivElement>(null);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     resetVisual();
@@ -115,36 +138,78 @@ export function TimelineClip({
         startTick: Math.max(0, snap(active.startTick + deltaTicks, snapEnabled)),
         durationTicks: active.durationTicks,
         sourceOffsetTicks: active.sourceOffsetTicks,
+        sourceDurationTicks: active.sourceDurationTicks,
       };
     }
 
     if (active.mode === "trim-end") {
-      const maximumEnd =
-        sourceDurationTicks === null
-          ? Number.POSITIVE_INFINITY
-          : active.startTick + sourceDurationTicks - active.sourceOffsetTicks;
+      const minimumDuration =
+        resizeMode === "stretch" ? Math.max(1, Math.ceil(active.sourceDurationTicks / 4)) : 1;
+      const maximumDuration =
+        resizeMode === "stretch"
+          ? active.sourceDurationTicks * 4
+          : sourceDurationTicks === null
+            ? Number.POSITIVE_INFINITY
+            : Math.floor(
+                ((sourceDurationTicks - active.sourceOffsetTicks) * active.durationTicks) /
+                  active.sourceDurationTicks,
+              );
+      const maximumEnd = active.startTick + maximumDuration;
       const endTick = Math.min(
         maximumEnd,
-        Math.max(active.startTick + 1, snap(originalEnd + deltaTicks, snapEnabled)),
+        Math.max(active.startTick + minimumDuration, snap(originalEnd + deltaTicks, snapEnabled)),
       );
       return {
         startTick: active.startTick,
         durationTicks: endTick - active.startTick,
         sourceOffsetTicks: active.sourceOffsetTicks,
+        sourceDurationTicks:
+          resizeMode === "stretch"
+            ? active.sourceDurationTicks
+            : Math.max(
+                1,
+                Math.round(
+                  (active.sourceDurationTicks * (endTick - active.startTick)) /
+                    active.durationTicks,
+                ),
+              ),
       };
     }
 
-    const minimumStart = clip.sourcePath
-      ? Math.max(0, active.startTick - active.sourceOffsetTicks)
-      : 0;
+    const minimumStart =
+      resizeMode === "stretch" || !clip.sourcePath
+        ? resizeMode === "stretch"
+          ? Math.max(0, originalEnd - active.sourceDurationTicks * 4)
+          : 0
+        : Math.max(
+            0,
+            active.startTick -
+              Math.floor(
+                (active.sourceOffsetTicks * active.durationTicks) / active.sourceDurationTicks,
+              ),
+          );
     const nextStart = Math.min(
-      originalEnd - 1,
+      originalEnd -
+        (resizeMode === "stretch" ? Math.max(1, Math.ceil(active.sourceDurationTicks / 4)) : 1),
       Math.max(minimumStart, snap(active.startTick + deltaTicks, snapEnabled)),
     );
+    const nextDuration = originalEnd - nextStart;
+    const nextSourceDuration =
+      resizeMode === "stretch"
+        ? active.sourceDurationTicks
+        : Math.max(
+            1,
+            Math.round((active.sourceDurationTicks * nextDuration) / active.durationTicks),
+          );
     return {
       startTick: nextStart,
-      durationTicks: originalEnd - nextStart,
-      sourceOffsetTicks: active.sourceOffsetTicks + nextStart - active.startTick,
+      durationTicks: nextDuration,
+      sourceOffsetTicks: !clip.sourcePath
+        ? 0
+        : resizeMode === "stretch"
+          ? active.sourceOffsetTicks
+          : active.sourceOffsetTicks + active.sourceDurationTicks - nextSourceDuration,
+      sourceDurationTicks: nextSourceDuration,
     };
   }
 
@@ -199,6 +264,7 @@ export function TimelineClip({
       startTick: clip.startTick,
       durationTicks: clip.durationTicks,
       sourceOffsetTicks: clip.sourceOffsetTicks,
+      sourceDurationTicks: clip.sourceDurationTicks,
     };
     const laneTop = lane.getBoundingClientRect().top;
     drag.current = {
@@ -243,6 +309,7 @@ export function TimelineClip({
       (next.startTick !== active.startTick ||
         next.durationTicks !== active.durationTicks ||
         next.sourceOffsetTicks !== active.sourceOffsetTicks ||
+        next.sourceDurationTicks !== active.sourceDurationTicks ||
         active.targetTrackId !== trackId);
     if (draftChanged) next = draftAt(active, event.clientX, !event.altKey);
     drag.current = null;
@@ -253,12 +320,14 @@ export function TimelineClip({
       (next.startTick !== clip.startTick ||
         next.durationTicks !== clip.durationTicks ||
         next.sourceOffsetTicks !== clip.sourceOffsetTicks ||
+        next.sourceDurationTicks !== clip.sourceDurationTicks ||
         active.targetTrackId !== trackId)
     ) {
       void onCommit({
         id: clip.id,
         trackId: active.targetTrackId,
         name: clip.name,
+        resizeMode,
         ...next,
       }).then((success) => {
         if (!success) resetVisual();
@@ -280,73 +349,158 @@ export function TimelineClip({
     resetVisual();
   }
 
+  function setProperties(
+    update: Partial<Pick<SetTimelineClipPropertiesParams, "stretchMode">> = {},
+    makeUnique = false,
+  ) {
+    return onSetProperties({
+      id: clip.id,
+      stretchMode: update.stretchMode ?? clip.stretchMode,
+      gainDb: clip.gainDb,
+      pan: clip.pan,
+      pitchSemitones: clip.pitchSemitones,
+      tempoPercent: null,
+      makeUnique,
+    });
+  }
+
   return (
-    <div
-      ref={element}
-      role="button"
-      tabIndex={0}
-      aria-label={`${clip.name}, starts at tick ${clip.startTick}`}
-      aria-pressed={selected}
-      className={cn(
-        "group absolute top-2 min-w-4 touch-none overflow-hidden rounded-sm border shadow-sm outline-none data-[dragging]:cursor-grabbing",
-        "focus-visible:ring-2 focus-visible:ring-ring/70",
-        tool === "cut" ? "cursor-crosshair" : "cursor-grab",
-        selected
-          ? "border-primary-foreground/30 bg-primary text-primary-foreground"
-          : "border-border bg-secondary text-secondary-foreground hover:border-foreground/30",
-      )}
-      style={{
-        left: clip.startTick * pixelsPerTick,
-        width: Math.max(16, clip.durationTicks * pixelsPerTick),
-        height: "calc(var(--timeline-track-height) - 16px)",
-      }}
-      onPointerDown={handlePointerDown}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={hideCutPreview}
-      onPointerUp={finishDrag}
-      onPointerCancel={cancelDrag}
-      onFocus={() => onSelect(clip.id)}
-      onContextMenu={(event) => {
-        event.preventDefault();
-        onDelete(clip.id);
-      }}
-    >
-      {clip.sourcePath && sourceDurationTicks ? (
-        <ClipWaveform
-          peaks={clip.waveform}
-          sourceOffsetTicks={clip.sourceOffsetTicks}
-          durationTicks={clip.durationTicks}
-          sourceDurationTicks={sourceDurationTicks}
+    <>
+      <ContextMenu onOpenChange={(open) => open && onSelect(clip.id)}>
+        <ContextMenuTrigger asChild>
+          <div
+            ref={element}
+            role="button"
+            tabIndex={0}
+            aria-label={`${clip.name}, starts at tick ${clip.startTick}`}
+            aria-pressed={selected}
+            className={cn(
+              "group absolute inset-y-0 min-w-4 touch-none overflow-hidden border shadow-sm outline-none data-[dragging]:cursor-grabbing",
+              "focus-visible:z-20 focus-visible:ring-2 focus-visible:ring-ring/70",
+              tool === "cut" ? "cursor-crosshair" : "cursor-grab",
+              selected
+                ? "border-primary-foreground/30 bg-primary text-primary-foreground"
+                : "border-border bg-secondary text-secondary-foreground hover:border-foreground/30",
+            )}
+            style={{
+              left: clip.startTick * pixelsPerTick,
+              width: Math.max(16, clip.durationTicks * pixelsPerTick),
+            }}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerLeave={hideCutPreview}
+            onPointerUp={finishDrag}
+            onPointerCancel={cancelDrag}
+            onFocus={() => onSelect(clip.id)}
+          >
+            {clip.sourcePath && sourceDurationTicks ? (
+              <ClipWaveform
+                peaks={clip.waveform}
+                sourceOffsetTicks={clip.sourceOffsetTicks}
+                durationTicks={clip.sourceDurationTicks}
+                sourceDurationTicks={sourceDurationTicks}
+              />
+            ) : null}
+            {tool === "cut" ? (
+              <div
+                ref={cutPreview}
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-destructive opacity-0 shadow-sm"
+              />
+            ) : null}
+            {tool === "select" ? (
+              <div
+                data-edge="start"
+                className="absolute inset-y-0 left-0 z-20 w-2 cursor-ew-resize border-l-2 border-transparent group-hover:border-current/40"
+              />
+            ) : null}
+            <div className="absolute inset-x-0 top-0 z-10 flex h-6 min-w-0 items-center gap-1 border-b border-current/15 bg-current/10 pl-2">
+              <span className="pointer-events-none min-w-0 flex-1 truncate text-[11px] font-medium">
+                {clip.name}
+              </span>
+              <Button
+                size="icon-xs"
+                variant="ghost"
+                className="size-5 hover:bg-background/20 hover:text-current"
+                aria-label={`Open ${clip.name} menu`}
+                onPointerDown={(event) => event.stopPropagation()}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const bounds = event.currentTarget.getBoundingClientRect();
+                  element.current?.dispatchEvent(
+                    new MouseEvent("contextmenu", {
+                      bubbles: true,
+                      clientX: bounds.right,
+                      clientY: bounds.bottom,
+                    }),
+                  );
+                }}
+              >
+                <Ellipsis />
+              </Button>
+            </div>
+            <span className="pointer-events-none absolute right-2 bottom-1 left-2 truncate font-mono text-[9px] uppercase tracking-[0.14em] opacity-50">
+              {clip.sourcePath
+                ? `${clip.stretchMode} / ${Math.round(clip.tempoPercent)}%`
+                : "Empty region"}
+            </span>
+            {tool === "select" ? (
+              <div
+                data-edge="end"
+                className="absolute inset-y-0 right-0 z-20 w-2 cursor-ew-resize border-r-2 border-transparent group-hover:border-current/40"
+              />
+            ) : null}
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-56">
+          <ContextMenuLabel className="truncate text-xs text-muted-foreground">
+            {clip.name}
+          </ContextMenuLabel>
+          {clip.sourcePath ? (
+            <>
+              <ContextMenuLabel className="pb-0 text-[10px] uppercase tracking-wider text-muted-foreground">
+                Time stretching
+              </ContextMenuLabel>
+              <ContextMenuRadioGroup
+                value={clip.stretchMode}
+                onValueChange={(stretchMode) =>
+                  void setProperties({
+                    stretchMode: stretchMode as SetTimelineClipPropertiesParams["stretchMode"],
+                  })
+                }
+              >
+                <ContextMenuRadioItem value="resample">Resample</ContextMenuRadioItem>
+                <ContextMenuRadioItem value="stretch">Stretch</ContextMenuRadioItem>
+              </ContextMenuRadioGroup>
+              <ContextMenuSeparator />
+              <ContextMenuItem
+                onSelect={() => window.requestAnimationFrame(() => setSettingsOpen(true))}
+              >
+                More...
+              </ContextMenuItem>
+              <ContextMenuItem
+                disabled={clip.isUnique}
+                onSelect={() => void setProperties({}, true)}
+              >
+                {clip.isUnique ? "Unique settings" : "Make unique"}
+              </ContextMenuItem>
+              <ContextMenuSeparator />
+            </>
+          ) : null}
+          <ContextMenuItem variant="destructive" onSelect={() => onDelete(clip.id)}>
+            Delete clip
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+      {clip.sourcePath ? (
+        <AudioClipSettingsDialog
+          clip={clip}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          onSave={onSetProperties}
         />
       ) : null}
-      {tool === "cut" ? (
-        <div
-          ref={cutPreview}
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 z-20 w-0.5 -translate-x-1/2 bg-destructive opacity-0 shadow-sm"
-        />
-      ) : null}
-      {tool === "select" ? (
-        <div
-          data-edge="start"
-          className="absolute inset-y-0 left-0 z-10 w-2 cursor-ew-resize border-l-2 border-transparent group-hover:border-current/40"
-        />
-      ) : null}
-      <div className="pointer-events-none flex h-full flex-col justify-between px-3 py-2">
-        <span className="truncate text-xs font-medium">{clip.name}</span>
-        <span className="font-mono text-[10px] uppercase tracking-[0.18em] opacity-55">
-          {clip.sourcePath
-            ? `${clip.sourceSampleRate} Hz / ${clip.sourceChannels === 1 ? "mono" : "stereo"}`
-            : "Empty region"}
-        </span>
-      </div>
-      {tool === "select" ? (
-        <div
-          data-edge="end"
-          className="absolute inset-y-0 right-0 z-10 w-2 cursor-ew-resize border-r-2 border-transparent group-hover:border-current/40"
-        />
-      ) : null}
-    </div>
+    </>
   );
 }
 

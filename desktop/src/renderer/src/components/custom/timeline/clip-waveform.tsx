@@ -45,5 +45,7 @@ export function ClipWaveform({
     return () => observer.disconnect();
   }, [durationTicks, peaks, sourceDurationTicks, sourceOffsetTicks]);
 
-  return <canvas ref={canvas} className="pointer-events-none absolute inset-0 size-full" />;
+  return (
+    <canvas ref={canvas} className="pointer-events-none absolute inset-x-0 top-6 bottom-0 w-full" />
+  );
 }

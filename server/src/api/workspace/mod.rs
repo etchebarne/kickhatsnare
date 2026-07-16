@@ -17,6 +17,7 @@ mod save_timeline_clip;
 mod save_timeline_track;
 mod set_master_mix;
 mod set_mix_node_position;
+mod set_timeline_clip_properties;
 mod set_timeline_settings;
 mod split_timeline_clip;
 mod undo;
@@ -29,7 +30,8 @@ use kickhatsnare_protocol::{
         DeleteTimelineTrack, DeleteWorkspaceEntry, DisconnectMixPorts, GetWorkspace,
         ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace, OpenWorkspace, RedoWorkspace,
         SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs, SetMasterMix,
-        SetMixNodePosition, SetTimelineSettings, SplitTimelineClip, UndoWorkspace,
+        SetMixNodePosition, SetTimelineClipProperties, SetTimelineSettings, SplitTimelineClip,
+        UndoWorkspace,
     },
 };
 use serde_json::Value;
@@ -62,6 +64,9 @@ pub(super) fn dispatch(
         SaveTimelineTrack::NAME => save_timeline_track::handle(params, core.workspaces()),
         SetMasterMix::NAME => set_master_mix::handle(params, core.workspaces()),
         SetMixNodePosition::NAME => set_mix_node_position::handle(params, core.workspaces()),
+        SetTimelineClipProperties::NAME => {
+            set_timeline_clip_properties::handle(params, core.workspaces())
+        }
         SetTimelineSettings::NAME => set_timeline_settings::handle(params, core.workspaces()),
         SplitTimelineClip::NAME => split_timeline_clip::handle(params, core.workspaces()),
         UndoWorkspace::NAME => undo::handle(params, core.workspaces()),
@@ -75,6 +80,7 @@ pub(super) fn dispatch(
             DeleteTimelineClip::NAME
             | DeleteTimelineTrack::NAME
             | SaveTimelineClip::NAME
+            | SetTimelineClipProperties::NAME
             | SplitTimelineClip::NAME => {
                 core.refresh_audio_timeline()
                     .map_err(|error| core_error(&error))?;
@@ -173,22 +179,7 @@ fn serialize_snapshot(
                     is_soloed: track.is_soloed,
                     gain_db: track.gain_db,
                     pan: track.pan,
-                    clips: track
-                        .clips
-                        .into_iter()
-                        .map(|clip| kickhatsnare_protocol::workspace::TimelineClip {
-                            id: clip.id,
-                            name: clip.name,
-                            start_tick: clip.start_tick,
-                            duration_ticks: clip.duration_ticks,
-                            source_offset_ticks: clip.source_offset_ticks,
-                            source_path: clip.source_path,
-                            source_sample_rate: clip.source_sample_rate,
-                            source_channels: clip.source_channels,
-                            source_duration_seconds: clip.source_duration_seconds,
-                            waveform: clip.waveform,
-                        })
-                        .collect(),
+                    clips: track.clips.into_iter().map(serialize_clip).collect(),
                 })
                 .collect(),
         },
@@ -202,6 +193,30 @@ fn serialize_snapshot(
             error.to_string(),
         )
     })
+}
+
+fn serialize_clip(
+    clip: kickhatsnare_core::workspace::TimelineClipSnapshot,
+) -> kickhatsnare_protocol::workspace::TimelineClip {
+    kickhatsnare_protocol::workspace::TimelineClip {
+        id: clip.id,
+        name: clip.name,
+        start_tick: clip.start_tick,
+        duration_ticks: clip.duration_ticks,
+        source_offset_ticks: clip.source_offset_ticks,
+        source_duration_ticks: clip.source_duration_ticks,
+        source_path: clip.source_path,
+        source_sample_rate: clip.source_sample_rate,
+        source_channels: clip.source_channels,
+        source_duration_seconds: clip.source_duration_seconds,
+        waveform: clip.waveform,
+        stretch_mode: serialize_clip_stretch_mode(clip.stretch_mode),
+        gain_db: clip.gain_db,
+        pan: clip.pan,
+        pitch_semitones: clip.pitch_semitones,
+        tempo_percent: clip.tempo_percent,
+        is_unique: clip.is_unique,
+    }
 }
 
 fn serialize_history(
@@ -248,6 +263,45 @@ fn serialize_grid_division(
         Core::QuarterTriplet => kickhatsnare_protocol::workspace::GridDivision::QuarterTriplet,
         Core::EighthTriplet => kickhatsnare_protocol::workspace::GridDivision::EighthTriplet,
         Core::SixteenthTriplet => kickhatsnare_protocol::workspace::GridDivision::SixteenthTriplet,
+    }
+}
+
+pub(super) fn deserialize_clip_stretch_mode(
+    mode: kickhatsnare_protocol::workspace::ClipStretchMode,
+) -> kickhatsnare_core::workspace::ClipStretchMode {
+    match mode {
+        kickhatsnare_protocol::workspace::ClipStretchMode::Resample => {
+            kickhatsnare_core::workspace::ClipStretchMode::Resample
+        }
+        kickhatsnare_protocol::workspace::ClipStretchMode::Stretch => {
+            kickhatsnare_core::workspace::ClipStretchMode::Stretch
+        }
+    }
+}
+
+pub(super) fn deserialize_clip_resize_mode(
+    mode: kickhatsnare_protocol::workspace::ClipResizeMode,
+) -> kickhatsnare_core::workspace::ClipResizeMode {
+    match mode {
+        kickhatsnare_protocol::workspace::ClipResizeMode::Trim => {
+            kickhatsnare_core::workspace::ClipResizeMode::Trim
+        }
+        kickhatsnare_protocol::workspace::ClipResizeMode::Stretch => {
+            kickhatsnare_core::workspace::ClipResizeMode::Stretch
+        }
+    }
+}
+
+fn serialize_clip_stretch_mode(
+    mode: kickhatsnare_core::workspace::ClipStretchMode,
+) -> kickhatsnare_protocol::workspace::ClipStretchMode {
+    match mode {
+        kickhatsnare_core::workspace::ClipStretchMode::Resample => {
+            kickhatsnare_protocol::workspace::ClipStretchMode::Resample
+        }
+        kickhatsnare_core::workspace::ClipStretchMode::Stretch => {
+            kickhatsnare_protocol::workspace::ClipStretchMode::Stretch
+        }
     }
 }
 

@@ -98,7 +98,7 @@ export function App() {
             <header className="flex h-11 shrink-0 items-center border-b border-border bg-card">
               <TimelineTransportControls />
               {view === "arrangement" ? <TimelineToolControls /> : null}
-              <TimelineHeaderControls />
+              <TimelineHeaderControls showResizeControls={view === "arrangement"} />
               <div className="ml-auto flex items-center gap-1 px-2">
                 <Button
                   size="sm"

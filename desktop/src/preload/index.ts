@@ -45,6 +45,8 @@ const api: KickHatSnareApi = {
   setMasterMix: (params) => ipcRenderer.invoke(ipcChannels.workspaceSetMasterMix, params),
   setMixNodePosition: (params) =>
     ipcRenderer.invoke(ipcChannels.workspaceSetMixNodePosition, params),
+  setTimelineClipProperties: (params) =>
+    ipcRenderer.invoke(ipcChannels.workspaceSetTimelineClipProperties, params),
   splitTimelineClip: (params) => ipcRenderer.invoke(ipcChannels.workspaceSplitTimelineClip, params),
   undoWorkspace: () => ipcRenderer.invoke(ipcChannels.workspaceUndo),
   minimizeWindow: () => ipcRenderer.invoke(ipcChannels.windowMinimize),

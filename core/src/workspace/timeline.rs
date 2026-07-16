@@ -1,4 +1,7 @@
-use std::{collections::HashSet, path::Path};
+use std::{
+    collections::{HashMap, HashSet},
+    path::Path,
+};
 
 use std::sync::Arc;
 
@@ -30,6 +33,20 @@ pub enum GridDivision {
     QuarterTriplet,
     EighthTriplet,
     SixteenthTriplet,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub enum ClipStretchMode {
+    #[default]
+    Resample,
+    Stretch,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ClipResizeMode {
+    Trim,
+    Stretch,
 }
 
 impl GridDivision {
@@ -81,11 +98,18 @@ pub struct TimelineClipSnapshot {
     pub start_tick: u32,
     pub duration_ticks: u32,
     pub source_offset_ticks: u32,
+    pub source_duration_ticks: u32,
     pub source_path: Option<String>,
     pub source_sample_rate: u32,
     pub source_channels: u16,
     pub source_duration_seconds: f64,
     pub waveform: Vec<f32>,
+    pub stretch_mode: ClipStretchMode,
+    pub gain_db: f64,
+    pub pan: f64,
+    pub pitch_semitones: f64,
+    pub tempo_percent: f64,
+    pub is_unique: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -109,6 +133,8 @@ pub(super) struct Timeline {
     tracks: Vec<TimelineTrack>,
     next_track_id: u64,
     next_clip_id: u64,
+    #[serde(default = "default_next_clip_settings_id")]
+    next_clip_settings_id: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
@@ -140,6 +166,8 @@ struct TimelineClip {
     duration_ticks: u32,
     source_offset_ticks: u32,
     #[serde(default)]
+    source_duration_ticks: u32,
+    #[serde(default)]
     source_path: Option<String>,
     #[serde(default)]
     source_sample_rate: u32,
@@ -149,6 +177,35 @@ struct TimelineClip {
     source_duration_seconds: f64,
     #[serde(default)]
     waveform: Arc<Vec<f32>>,
+    #[serde(default)]
+    settings_id: String,
+    #[serde(default)]
+    settings: TimelineClipSettings,
+    #[serde(default)]
+    is_unique: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TimelineClipSettings {
+    stretch_mode: ClipStretchMode,
+    gain_db: f64,
+    pan: f64,
+    pitch_semitones: f64,
+    #[serde(default = "default_tempo_percent")]
+    tempo_percent: f64,
+}
+
+impl Default for TimelineClipSettings {
+    fn default() -> Self {
+        Self {
+            stretch_mode: ClipStretchMode::default(),
+            gain_db: 0.0,
+            pan: 0.0,
+            pitch_semitones: 0.0,
+            tempo_percent: default_tempo_percent(),
+        }
+    }
 }
 
 impl Default for Timeline {
@@ -171,6 +228,7 @@ impl Default for Timeline {
             tracks,
             next_track_id: DEFAULT_TRACK_COUNT + 1,
             next_clip_id: 1,
+            next_clip_settings_id: 1,
         }
     }
 }
@@ -210,11 +268,18 @@ impl Timeline {
                             start_tick: clip.start_tick,
                             duration_ticks: clip.duration_ticks,
                             source_offset_ticks: clip.source_offset_ticks,
+                            source_duration_ticks: clip.source_duration_ticks,
                             source_path: clip.source_path.clone(),
                             source_sample_rate: clip.source_sample_rate,
                             source_channels: clip.source_channels,
                             source_duration_seconds: clip.source_duration_seconds,
                             waveform: clip.waveform.as_ref().clone(),
+                            stretch_mode: clip.settings.stretch_mode,
+                            gain_db: clip.settings.gain_db,
+                            pan: clip.settings.pan,
+                            pitch_semitones: clip.settings.pitch_semitones,
+                            tempo_percent: clip.settings.tempo_percent,
+                            is_unique: clip.is_unique,
                         })
                         .collect(),
                 })
@@ -231,6 +296,7 @@ impl Timeline {
         validate_gain(self.master_gain_db, "master")?;
         let mut track_ids = HashSet::new();
         let mut clip_ids = HashSet::new();
+        let mut clip_settings = HashMap::new();
         for track in &self.tracks {
             validate_name(&track.name, "track")?;
             validate_gain(track.gain_db, "track")?;
@@ -244,6 +310,26 @@ impl Timeline {
                 validate_name(&clip.name, "clip")?;
                 validate_clip_range(clip.start_tick, clip.duration_ticks)?;
                 validate_source(clip, self.bpm)?;
+                validate_clip_settings(&clip.settings)?;
+                if clip.settings_id.is_empty() {
+                    return Err(CoreError::new(
+                        "project contains an invalid clip settings ID",
+                    ));
+                }
+                if let Some((settings, is_unique, source_path)) =
+                    clip_settings.get(clip.settings_id.as_str())
+                    && (*settings != &clip.settings
+                        || *is_unique != clip.is_unique
+                        || *source_path != clip.source_path.as_deref())
+                {
+                    return Err(CoreError::new(
+                        "project contains inconsistent shared clip settings",
+                    ));
+                }
+                clip_settings.insert(
+                    clip.settings_id.as_str(),
+                    (&clip.settings, clip.is_unique, clip.source_path.as_deref()),
+                );
                 if clip.id.is_empty() || !clip_ids.insert(clip.id.as_str()) {
                     return Err(CoreError::new(
                         "project contains an invalid or duplicate clip ID",
@@ -304,6 +390,26 @@ impl Timeline {
                 track.legacy_node_y = None;
             }
         }
+        if format_version < 5 {
+            let mut source_settings = HashMap::new();
+            let mut next_settings_id = 1_u64;
+            for clip in self.tracks.iter_mut().flat_map(|track| &mut track.clips) {
+                clip.source_duration_ticks = clip.duration_ticks;
+                let key = clip
+                    .source_path
+                    .clone()
+                    .unwrap_or_else(|| format!("region:{}", clip.id));
+                clip.settings_id
+                    .clone_from(source_settings.entry(key).or_insert_with(|| {
+                        let id = format!("clip-settings-{next_settings_id}");
+                        next_settings_id = next_settings_id.saturating_add(1);
+                        id
+                    }));
+                clip.settings = TimelineClipSettings::default();
+                clip.is_unique = clip.source_path.is_none();
+            }
+            self.next_clip_settings_id = next_settings_id;
+        }
     }
 
     pub(super) fn set_settings(
@@ -326,6 +432,7 @@ impl Timeline {
             {
                 clip.source_offset_ticks = scale_ticks(clip.source_offset_ticks, scale)?;
                 clip.duration_ticks = scale_ticks(clip.duration_ticks, scale)?.max(1);
+                clip.source_duration_ticks = scale_ticks(clip.source_duration_ticks, scale)?.max(1);
 
                 let source_ticks = seconds_to_ticks(clip.source_duration_seconds, bpm).max(1);
                 if clip.source_offset_ticks >= source_ticks {
@@ -333,8 +440,8 @@ impl Timeline {
                         "audio clip trim exceeds the source duration",
                     ));
                 }
-                clip.duration_ticks = clip
-                    .duration_ticks
+                clip.source_duration_ticks = clip
+                    .source_duration_ticks
                     .min(source_ticks - clip.source_offset_ticks);
                 validate_clip_range(clip.start_tick, clip.duration_ticks)?;
             }
@@ -415,9 +522,16 @@ impl Timeline {
         start_tick: u32,
         duration_ticks: u32,
         source_offset_ticks: u32,
+        source_duration_ticks: u32,
+        resize_mode: ClipResizeMode,
     ) -> Result<(), CoreError> {
         let name = validate_name(name, "clip")?;
         validate_clip_range(start_tick, duration_ticks)?;
+        if source_duration_ticks == 0 {
+            return Err(CoreError::new(
+                "timeline clip source duration must be greater than zero",
+            ));
+        }
         let target_track_index = self
             .tracks
             .iter()
@@ -438,33 +552,55 @@ impl Timeline {
                 })
                 .ok_or_else(|| CoreError::new("timeline clip does not exist"))?;
             let existing = &self.tracks[source_track_index].clips[clip_index];
-            if existing.source_path.is_some() {
+            let is_audio = existing.source_path.is_some();
+            let settings_id = existing.settings_id.clone();
+            let duration_changed = existing.duration_ticks != duration_ticks
+                || existing.source_duration_ticks != source_duration_ticks;
+            if is_audio {
                 let source_ticks = seconds_to_ticks(existing.source_duration_seconds, self.bpm);
-                if source_offset_ticks.saturating_add(duration_ticks) > source_ticks {
+                if source_offset_ticks.saturating_add(source_duration_ticks) > source_ticks {
                     return Err(CoreError::new(
                         "audio clip trim exceeds the source duration",
                     ));
                 }
+            }
+            if is_audio && duration_changed && resize_mode == ClipResizeMode::Stretch {
+                self.propagate_stretch_tempo(
+                    id,
+                    &settings_id,
+                    source_duration_ticks,
+                    duration_ticks,
+                )?;
             }
             let mut clip = self.tracks[source_track_index].clips.remove(clip_index);
             clip.name = name;
             clip.start_tick = start_tick;
             clip.duration_ticks = duration_ticks;
             clip.source_offset_ticks = source_offset_ticks;
+            clip.source_duration_ticks = if clip.source_path.is_some() {
+                source_duration_ticks
+            } else {
+                duration_ticks
+            };
             self.tracks[target_track_index].clips.push(clip);
         } else {
             let id = self.next_clip_id()?;
+            let settings_id = self.next_clip_settings_id()?;
             self.tracks[target_track_index].clips.push(TimelineClip {
                 id,
                 name,
                 start_tick,
                 duration_ticks,
                 source_offset_ticks,
+                source_duration_ticks: duration_ticks,
                 source_path: None,
                 source_sample_rate: 0,
                 source_channels: 0,
                 source_duration_seconds: 0.0,
                 waveform: Arc::new(Vec::new()),
+                settings_id,
+                settings: TimelineClipSettings::default(),
+                is_unique: true,
             });
         }
         self.tracks[target_track_index]
@@ -496,11 +632,22 @@ impl Timeline {
         if split_tick <= clip.start_tick || split_tick >= end_tick {
             return Err(CoreError::new("split point must be inside timeline clip"));
         }
+        if clip.source_path.is_some() && clip.source_duration_ticks < 2 {
+            return Err(CoreError::new(
+                "audio clip source window is too short to split",
+            ));
+        }
         let left_duration = split_tick - clip.start_tick;
         let right_duration = end_tick - split_tick;
+        let (left_source_duration, consumed_source_duration, right_source_duration) =
+            split_source_duration(
+                clip.source_duration_ticks,
+                left_duration,
+                clip.duration_ticks,
+            );
         let right_source_offset = clip
             .source_offset_ticks
-            .checked_add(left_duration)
+            .checked_add(consumed_source_duration)
             .ok_or_else(|| {
                 CoreError::new("timeline clip source range exceeds the supported tick range")
             })?;
@@ -509,10 +656,12 @@ impl Timeline {
             let left = &mut self.tracks[track_index].clips[clip_index];
             let mut right = left.clone();
             left.duration_ticks = left_duration;
+            left.source_duration_ticks = left_source_duration;
             right.id = right_id;
             right.start_tick = split_tick;
             right.duration_ticks = right_duration;
             right.source_offset_ticks = right_source_offset;
+            right.source_duration_ticks = right_source_duration;
             right
         };
         self.tracks[track_index].clips.push(right);
@@ -563,21 +712,151 @@ impl Timeline {
             return Err(CoreError::new("audio clip waveform is invalid"));
         }
         let id = self.next_clip_id()?;
+        let shared_settings = self
+            .tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .find(|clip| {
+                !clip.is_unique && clip.source_path.as_deref() == Some(source_path.as_str())
+            })
+            .map(|clip| (clip.settings_id.clone(), clip.settings.clone()));
+        let (settings_id, settings) = if let Some(shared) = shared_settings {
+            shared
+        } else {
+            (
+                self.next_clip_settings_id()?,
+                TimelineClipSettings::default(),
+            )
+        };
+        let clip_duration_ticks =
+            tempo_duration_ticks(duration_ticks, settings.tempo_percent, start_tick)?;
         self.tracks[target_track_index].clips.push(TimelineClip {
             id,
             name,
             start_tick,
-            duration_ticks,
+            duration_ticks: clip_duration_ticks,
             source_offset_ticks: 0,
+            source_duration_ticks: duration_ticks,
             source_path: Some(source_path),
             source_sample_rate: sample_rate,
             source_channels: channels,
             source_duration_seconds: duration_seconds,
             waveform: Arc::new(waveform),
+            settings_id,
+            settings,
+            is_unique: false,
         });
         self.tracks[target_track_index]
             .clips
             .sort_by_key(|clip| (clip.start_tick, clip.id.clone()));
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn set_clip_properties(
+        &mut self,
+        id: &str,
+        stretch_mode: ClipStretchMode,
+        gain_db: f64,
+        pan: f64,
+        pitch_semitones: f64,
+        tempo_percent: Option<f64>,
+        make_unique: bool,
+    ) -> Result<(), CoreError> {
+        if tempo_percent.is_some_and(|tempo| !tempo.is_finite() || !(25.0..=400.0).contains(&tempo))
+        {
+            return Err(CoreError::new("clip tempo must be between 25% and 400%"));
+        }
+
+        let mut updated = self.clone();
+        let (track_index, clip_index) = updated
+            .tracks
+            .iter()
+            .enumerate()
+            .find_map(|(track_index, track)| {
+                track
+                    .clips
+                    .iter()
+                    .position(|clip| clip.id == id)
+                    .map(|clip_index| (track_index, clip_index))
+            })
+            .ok_or_else(|| CoreError::new("timeline clip does not exist"))?;
+        if updated.tracks[track_index].clips[clip_index]
+            .source_path
+            .is_none()
+        {
+            return Err(CoreError::new("timeline clip does not contain audio"));
+        }
+        let settings = TimelineClipSettings {
+            stretch_mode,
+            gain_db,
+            pan,
+            pitch_semitones,
+            tempo_percent: tempo_percent.unwrap_or(
+                updated.tracks[track_index].clips[clip_index]
+                    .settings
+                    .tempo_percent,
+            ),
+        };
+        validate_clip_settings(&settings)?;
+        if make_unique && !updated.tracks[track_index].clips[clip_index].is_unique {
+            let settings_id = updated.next_clip_settings_id()?;
+            let clip = &mut updated.tracks[track_index].clips[clip_index];
+            clip.settings_id = settings_id;
+            clip.is_unique = true;
+        }
+        let settings_id = updated.tracks[track_index].clips[clip_index]
+            .settings_id
+            .clone();
+        for clip in updated
+            .tracks
+            .iter_mut()
+            .flat_map(|track| &mut track.clips)
+            .filter(|clip| clip.settings_id == settings_id)
+        {
+            clip.settings = settings.clone();
+            if let Some(tempo_percent) = tempo_percent {
+                clip.duration_ticks = tempo_duration_ticks(
+                    clip.source_duration_ticks,
+                    tempo_percent,
+                    clip.start_tick,
+                )?;
+            }
+        }
+        updated.validate()?;
+        *self = updated;
+        Ok(())
+    }
+
+    fn propagate_stretch_tempo(
+        &mut self,
+        edited_clip_id: &str,
+        settings_id: &str,
+        source_duration_ticks: u32,
+        duration_ticks: u32,
+    ) -> Result<(), CoreError> {
+        let tempo_percent = f64::from(source_duration_ticks) * 100.0 / f64::from(duration_ticks);
+        if !(25.0..=400.0).contains(&tempo_percent) {
+            return Err(CoreError::new("clip tempo must be between 25% and 400%"));
+        }
+        let resized = self
+            .tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .filter(|clip| clip.settings_id == settings_id && clip.id != edited_clip_id)
+            .map(|clip| {
+                tempo_duration_ticks(clip.source_duration_ticks, tempo_percent, clip.start_tick)
+                    .map(|duration| (clip.id.clone(), duration))
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        for clip in self.tracks.iter_mut().flat_map(|track| &mut track.clips) {
+            if clip.settings_id == settings_id {
+                clip.settings.tempo_percent = tempo_percent;
+            }
+            if let Some((_, duration)) = resized.iter().find(|(clip_id, _)| clip_id == &clip.id) {
+                clip.duration_ticks = *duration;
+            }
+        }
         Ok(())
     }
 
@@ -691,6 +970,24 @@ impl Timeline {
             }
         }
     }
+
+    fn next_clip_settings_id(&mut self) -> Result<String, CoreError> {
+        loop {
+            let id = format!("clip-settings-{}", self.next_clip_settings_id);
+            self.next_clip_settings_id = self
+                .next_clip_settings_id
+                .checked_add(1)
+                .ok_or_else(|| CoreError::new("timeline clip settings ID space is exhausted"))?;
+            if self
+                .tracks
+                .iter()
+                .flat_map(|track| &track.clips)
+                .all(|clip| clip.settings_id != id)
+            {
+                return Ok(id);
+            }
+        }
+    }
 }
 
 fn default_track(number: u64) -> TimelineTrack {
@@ -706,6 +1003,14 @@ fn default_track(number: u64) -> TimelineTrack {
         legacy_node_y: None,
         clips: Vec::new(),
     }
+}
+
+const fn default_next_clip_settings_id() -> u64 {
+    1
+}
+
+const fn default_tempo_percent() -> f64 {
+    100.0
 }
 
 fn validate_settings(
@@ -755,12 +1060,32 @@ fn validate_gain(gain_db: f64, entity: &str) -> Result<(), CoreError> {
 
 fn validate_pan(pan: f64) -> Result<(), CoreError> {
     if !pan.is_finite() || !(-1.0..=1.0).contains(&pan) {
-        return Err(CoreError::new("track pan must be between -1 and 1"));
+        return Err(CoreError::new("pan must be between -1 and 1"));
+    }
+    Ok(())
+}
+
+fn validate_clip_settings(settings: &TimelineClipSettings) -> Result<(), CoreError> {
+    validate_gain(settings.gain_db, "clip")?;
+    validate_pan(settings.pan)?;
+    if !settings.pitch_semitones.is_finite() || !(-24.0..=24.0).contains(&settings.pitch_semitones)
+    {
+        return Err(CoreError::new(
+            "clip pitch must be between -24 and 24 semitones",
+        ));
+    }
+    if !settings.tempo_percent.is_finite() || !(25.0..=400.0).contains(&settings.tempo_percent) {
+        return Err(CoreError::new("clip tempo must be between 25% and 400%"));
     }
     Ok(())
 }
 
 fn validate_source(clip: &TimelineClip, bpm: f64) -> Result<(), CoreError> {
+    if clip.source_duration_ticks == 0 {
+        return Err(CoreError::new(
+            "timeline clip source duration must be greater than zero",
+        ));
+    }
     let Some(source_path) = clip.source_path.as_deref() else {
         return Ok(());
     };
@@ -776,7 +1101,11 @@ fn validate_source(clip: &TimelineClip, bpm: f64) -> Result<(), CoreError> {
         return Err(CoreError::new("audio clip waveform is invalid"));
     }
     let source_ticks = seconds_to_ticks(clip.source_duration_seconds, bpm);
-    if clip.source_offset_ticks.saturating_add(clip.duration_ticks) > source_ticks {
+    if clip
+        .source_offset_ticks
+        .saturating_add(clip.source_duration_ticks)
+        > source_ticks
+    {
         return Err(CoreError::new(
             "audio clip trim exceeds the source duration",
         ));
@@ -821,6 +1150,33 @@ fn scale_ticks(ticks: u32, scale: f64) -> Result<u32, CoreError> {
     Ok(scaled.round() as u32)
 }
 
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn tempo_duration_ticks(
+    source_duration_ticks: u32,
+    tempo_percent: f64,
+    start_tick: u32,
+) -> Result<u32, CoreError> {
+    let duration = (f64::from(source_duration_ticks) * 100.0 / tempo_percent)
+        .round()
+        .clamp(1.0, f64::from(u32::MAX)) as u32;
+    validate_clip_range(start_tick, duration)?;
+    Ok(duration)
+}
+
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn split_source_duration(
+    source_duration_ticks: u32,
+    left_duration_ticks: u32,
+    duration_ticks: u32,
+) -> (u32, u32, u32) {
+    debug_assert!(source_duration_ticks > 1);
+    let consumed = (f64::from(source_duration_ticks) * f64::from(left_duration_ticks)
+        / f64::from(duration_ticks))
+    .round()
+    .clamp(1.0, f64::from(source_duration_ticks - 1)) as u32;
+    (consumed, consumed, source_duration_ticks - consumed)
+}
+
 fn validate_clip_range(start_tick: u32, duration_ticks: u32) -> Result<(), CoreError> {
     if duration_ticks == 0 {
         return Err(CoreError::new(
@@ -837,7 +1193,10 @@ fn validate_clip_range(start_tick: u32, duration_ticks: u32) -> Result<(), CoreE
 mod tests {
     use std::sync::Arc;
 
-    use super::{GridDivision, TICKS_PER_QUARTER, Timeline};
+    use super::{
+        ClipResizeMode, ClipStretchMode, GridDivision, TICKS_PER_QUARTER, Timeline,
+        TimelineClipSettings,
+    };
 
     #[test]
     fn creates_and_edits_tracks_and_clips_with_stable_ids() {
@@ -846,10 +1205,28 @@ mod tests {
             .save_track(Some("track-1"), "Drums", false, false, 0.0, 0.0)
             .expect("track should save");
         timeline
-            .save_clip(None, "track-1", "Intro", 0, 3_840, 0)
+            .save_clip(
+                None,
+                "track-1",
+                "Intro",
+                0,
+                3_840,
+                0,
+                3_840,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should save");
         timeline
-            .save_clip(Some("clip-1"), "track-1", "Intro", 960, 1_920, 240)
+            .save_clip(
+                Some("clip-1"),
+                "track-1",
+                "Intro",
+                960,
+                1_920,
+                240,
+                1_920,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should update");
 
         let snapshot = timeline.snapshot();
@@ -860,7 +1237,16 @@ mod tests {
         assert_eq!(snapshot.tracks[0].clips[0].source_offset_ticks, 240);
 
         timeline
-            .save_clip(Some("clip-1"), "track-2", "Intro", 960, 1_920, 240)
+            .save_clip(
+                Some("clip-1"),
+                "track-2",
+                "Intro",
+                960,
+                1_920,
+                240,
+                1_920,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should move between tracks");
         let moved = timeline.snapshot();
         assert!(moved.tracks[0].clips.is_empty());
@@ -894,20 +1280,215 @@ mod tests {
         assert_eq!(clips[0].start_tick, 960);
         assert_eq!(clips[0].duration_ticks, 1_920);
         assert_eq!(clips[0].source_offset_ticks, 0);
+        assert_eq!(clips[0].source_duration_ticks, 1_920);
         assert_eq!(clips[1].id, "clip-2");
         assert_eq!(clips[1].name, "Kick");
         assert_eq!(clips[1].start_tick, 2_880);
         assert_eq!(clips[1].duration_ticks, 1_920);
         assert_eq!(clips[1].source_offset_ticks, 1_920);
+        assert_eq!(clips[1].source_duration_ticks, 1_920);
         assert_eq!(clips[1].source_path.as_deref(), Some("Kick.wav"));
         assert!(Arc::ptr_eq(&clips[0].waveform, &clips[1].waveform));
+    }
+
+    #[test]
+    fn shares_source_settings_until_a_clip_is_made_unique() {
+        let mut timeline = Timeline::default();
+        for start_tick in [0, 3_840] {
+            timeline
+                .add_audio_clip(
+                    "track-1",
+                    "Loop.wav",
+                    "Loop",
+                    start_tick,
+                    3_840,
+                    48_000,
+                    2,
+                    2.0,
+                    vec![0.5],
+                )
+                .expect("audio clip should be added");
+        }
+
+        timeline
+            .set_clip_properties(
+                "clip-1",
+                ClipStretchMode::Stretch,
+                -3.0,
+                0.25,
+                5.0,
+                Some(200.0),
+                false,
+            )
+            .expect("shared properties should update");
+        let shared = timeline.snapshot();
+        let clips = &shared.tracks[0].clips;
+        assert_eq!(clips[0].stretch_mode, ClipStretchMode::Stretch);
+        assert_eq!(clips[1].stretch_mode, ClipStretchMode::Stretch);
+        assert_eq!(clips[0].duration_ticks, 1_920);
+        assert_eq!(clips[1].duration_ticks, 1_920);
+        assert!((clips[0].tempo_percent - 200.0).abs() < f64::EPSILON);
+
+        timeline
+            .add_audio_clip(
+                "track-1",
+                "Loop.wav",
+                "Loop",
+                7_680,
+                3_840,
+                48_000,
+                2,
+                2.0,
+                vec![0.5],
+            )
+            .expect("shared source should inherit settings");
+        assert_eq!(timeline.snapshot().tracks[0].clips[2].duration_ticks, 1_920);
+
+        timeline
+            .save_clip(
+                Some("clip-1"),
+                "track-1",
+                "Loop",
+                0,
+                3_840,
+                0,
+                3_840,
+                ClipResizeMode::Stretch,
+            )
+            .expect("stretch resize should update shared tempo");
+        let resized = timeline.snapshot();
+        assert!(resized.tracks[0].clips.iter().all(|clip| {
+            clip.duration_ticks == 3_840 && (clip.tempo_percent - 100.0).abs() < f64::EPSILON
+        }));
+
+        timeline
+            .set_clip_properties(
+                "clip-2",
+                ClipStretchMode::Resample,
+                0.0,
+                0.0,
+                0.0,
+                None,
+                true,
+            )
+            .expect("clip should become unique");
+        let unique = timeline.snapshot();
+        let clips = &unique.tracks[0].clips;
+        assert_eq!(clips[0].stretch_mode, ClipStretchMode::Stretch);
+        assert_eq!(clips[1].stretch_mode, ClipStretchMode::Resample);
+        assert!(!clips[0].is_unique);
+        assert!(clips[1].is_unique);
+    }
+
+    #[test]
+    fn migrates_version_four_audio_clips_to_shared_neutral_settings() {
+        let mut timeline: Timeline = serde_json::from_value(serde_json::json!({
+            "bpm": 120.0,
+            "timeSignatureNumerator": 4,
+            "timeSignatureDenominator": 4,
+            "gridDivision": "quarter",
+            "isSnapEnabled": true,
+            "tracks": [{
+                "id": "track-1",
+                "name": "Track 1",
+                "isMuted": false,
+                "isSoloed": false,
+                "clips": [
+                    {
+                        "id": "clip-1",
+                        "name": "Loop",
+                        "startTick": 0,
+                        "durationTicks": 3840,
+                        "sourceOffsetTicks": 0,
+                        "sourcePath": "Loop.wav",
+                        "sourceSampleRate": 48000,
+                        "sourceChannels": 2,
+                        "sourceDurationSeconds": 2.0,
+                        "waveform": [0.5]
+                    },
+                    {
+                        "id": "clip-2",
+                        "name": "Loop",
+                        "startTick": 3840,
+                        "durationTicks": 3840,
+                        "sourceOffsetTicks": 0,
+                        "sourcePath": "Loop.wav",
+                        "sourceSampleRate": 48000,
+                        "sourceChannels": 2,
+                        "sourceDurationSeconds": 2.0,
+                        "waveform": [0.5]
+                    }
+                ]
+            }],
+            "nextTrackId": 2,
+            "nextClipId": 3
+        }))
+        .expect("version four timeline should deserialize");
+
+        timeline.migrate_from(4);
+
+        let clips = &timeline.tracks[0].clips;
+        assert_eq!(clips[0].source_duration_ticks, 3_840);
+        assert_eq!(clips[0].settings_id, clips[1].settings_id);
+        assert_eq!(clips[0].settings, TimelineClipSettings::default());
+        assert!(!clips[0].is_unique);
+    }
+
+    #[test]
+    fn splits_stretched_clips_at_the_matching_source_position() {
+        let mut timeline = Timeline::default();
+        timeline
+            .add_audio_clip(
+                "track-1",
+                "Loop.wav",
+                "Loop",
+                0,
+                3_840,
+                48_000,
+                2,
+                2.0,
+                vec![0.5],
+            )
+            .expect("audio clip should be added");
+        timeline
+            .save_clip(
+                Some("clip-1"),
+                "track-1",
+                "Loop",
+                0,
+                1_920,
+                0,
+                3_840,
+                ClipResizeMode::Stretch,
+            )
+            .expect("clip should stretch");
+
+        timeline
+            .split_clip("clip-1", 960)
+            .expect("stretched clip should split");
+
+        let snapshot = timeline.snapshot();
+        let clips = &snapshot.tracks[0].clips;
+        assert_eq!(clips[0].duration_ticks, 960);
+        assert_eq!(clips[0].source_duration_ticks, 1_920);
+        assert_eq!(clips[1].source_offset_ticks, 1_920);
+        assert_eq!(clips[1].source_duration_ticks, 1_920);
     }
 
     #[test]
     fn rejects_split_points_at_clip_boundaries_without_mutating() {
         let mut timeline = Timeline::default();
         timeline
-            .save_clip(None, "track-1", "Region", 960, 1_920, 0)
+            .save_clip(
+                None,
+                "track-1",
+                "Region",
+                960,
+                1_920,
+                0,
+                1_920,
+                ClipResizeMode::Trim,
+            )
             .expect("clip should save");
         let before = timeline.clone();
 
@@ -960,10 +1541,28 @@ mod tests {
             )
             .expect("audio clip should be added");
         timeline
-            .save_clip(Some("clip-1"), "track-1", "Kick", 960, 1_920, 960)
+            .save_clip(
+                Some("clip-1"),
+                "track-1",
+                "Kick",
+                960,
+                1_920,
+                960,
+                1_920,
+                ClipResizeMode::Trim,
+            )
             .expect("audio clip should be trimmed");
         timeline
-            .save_clip(None, "track-1", "Pattern", 0, 3_840, 0)
+            .save_clip(
+                None,
+                "track-1",
+                "Pattern",
+                0,
+                3_840,
+                0,
+                3_840,
+                ClipResizeMode::Trim,
+            )
             .expect("pattern clip should be added");
 
         timeline
