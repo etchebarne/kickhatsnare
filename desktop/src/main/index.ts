@@ -3,10 +3,26 @@ import path from "node:path";
 import { app, BrowserWindow, dialog, ipcMain, shell, type IpcMainInvokeEvent } from "electron";
 
 import { ipcChannels } from "../shared/ipc";
+import type { WorkspaceSnapshot } from "../shared/ipc";
 import { CoreServer } from "./server-process";
+import { WorkspaceWatcher } from "./workspace-watcher";
 
 let mainWindow: BrowserWindow | null = null;
 let coreServer: CoreServer | null = null;
+let workspaceWatcher: WorkspaceWatcher | null = null;
+
+const audioFileExtensions = [
+  "aif",
+  "aiff",
+  "flac",
+  "m4a",
+  "mp3",
+  "oga",
+  "ogg",
+  "opus",
+  "wav",
+  "wave",
+];
 
 app.setPath("userData", path.join(app.getPath("appData"), "kickhatsnare"));
 
@@ -31,6 +47,7 @@ function createWindow(): void {
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
+  mainWindow.on("focus", () => workspaceWatcher?.refresh());
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     void shell.openExternal(url);
     return { action: "deny" };
@@ -80,7 +97,7 @@ async function openProject(event: IpcMainInvokeEvent) {
   const projectFilePath = selection.filePaths[0];
   if (selection.canceled || !projectFilePath) return null;
 
-  return getCoreServer().openWorkspace(projectFilePath);
+  return trackWorkspace(getCoreServer().openWorkspace(projectFilePath));
 }
 
 async function pinFolder(event: IpcMainInvokeEvent) {
@@ -112,7 +129,7 @@ async function saveProjectAs(event: IpcMainInvokeEvent) {
   });
   if (selection.canceled || !selection.filePath) return null;
 
-  return getCoreServer().saveWorkspaceAs(selection.filePath);
+  return trackWorkspace(getCoreServer().saveWorkspaceAs(selection.filePath));
 }
 
 async function saveProject(event: IpcMainInvokeEvent) {
@@ -120,11 +137,66 @@ async function saveProject(event: IpcMainInvokeEvent) {
   return workspace.rootPath ? getCoreServer().saveWorkspace() : saveProjectAs(event);
 }
 
+async function locateMissingMedia(event: IpcMainInvokeEvent, sourcePath: string) {
+  const window = windowForEvent(event);
+  if (!window) throw new Error("Audio file picker requires an application window");
+  const workspace = await getCoreServer().getWorkspace();
+  if (!workspace.rootPath) {
+    throw new Error("Save the project before locating replacement media");
+  }
+
+  const selection = await dialog.showOpenDialog(window, {
+    title: `Locate ${path.basename(sourcePath)}`,
+    buttonLabel: "Use Audio File",
+    defaultPath: workspace.rootPath,
+    properties: ["openFile"],
+    filters: [{ name: "Audio files", extensions: audioFileExtensions }],
+  });
+  const replacementPath = selection.filePaths[0];
+  if (selection.canceled || !replacementPath) return null;
+
+  const relativePath = path.relative(workspace.rootPath, replacementPath);
+  if (
+    !relativePath ||
+    relativePath === ".." ||
+    relativePath.startsWith(`..${path.sep}`) ||
+    path.isAbsolute(relativePath)
+  ) {
+    throw new Error("Replacement audio must be inside the project folder");
+  }
+  return getCoreServer().recoverMissingWorkspaceMedia({
+    sourcePath,
+    action: "replace",
+    replacementPath: relativePath.split(path.sep).join("/"),
+  });
+}
+
+async function trackWorkspace(
+  operation: Promise<WorkspaceSnapshot | null>,
+): Promise<WorkspaceSnapshot | null> {
+  const workspace = await operation;
+  if (workspace) await workspaceWatcher?.setRoot(workspace.rootPath);
+  return workspace;
+}
+
 app.whenReady().then(async () => {
   app.setAppUserModelId("com.kickhatsnare.desktop");
 
   coreServer = new CoreServer(app.getPath("userData"));
   await coreServer.start();
+  workspaceWatcher = new WorkspaceWatcher(async (moves) => {
+    const workspace = moves.length
+      ? await getCoreServer().reconcileMovedWorkspaceFiles(moves)
+      : await getCoreServer().getWorkspace();
+    mainWindow?.webContents.send(ipcChannels.workspaceChanged, workspace);
+    if (workspace.missingMedia.length > 0) {
+      void getCoreServer()
+        .stopAudio()
+        .catch((error: unknown) => {
+          console.error(`[workspace] Failed to stop missing media playback: ${String(error)}`);
+        });
+    }
+  });
   ipcMain.handle(ipcChannels.audioGetTransport, () => getCoreServer().getTransport());
   ipcMain.handle(ipcChannels.audioPause, () => getCoreServer().pauseAudio());
   ipcMain.handle(ipcChannels.audioPlay, () => getCoreServer().playAudio());
@@ -161,7 +233,7 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.workspaceDisconnectMixPorts, (_event, params) =>
     getCoreServer().disconnectMixPorts(params),
   );
-  ipcMain.handle(ipcChannels.workspaceGet, () => getCoreServer().getWorkspace());
+  ipcMain.handle(ipcChannels.workspaceGet, () => trackWorkspace(getCoreServer().getWorkspace()));
   ipcMain.handle(ipcChannels.workspaceImportAudio, (_event, payload: unknown) =>
     importWorkspaceAudio(payload),
   );
@@ -170,9 +242,13 @@ app.whenReady().then(async () => {
     (_event, sourcePath: string, destinationPath: string) =>
       getCoreServer().moveWorkspaceEntry(sourcePath, destinationPath),
   );
-  ipcMain.handle(ipcChannels.workspaceNew, () => getCoreServer().newWorkspace());
+  ipcMain.handle(ipcChannels.workspaceLocateMissingMedia, locateMissingMedia);
+  ipcMain.handle(ipcChannels.workspaceNew, () => trackWorkspace(getCoreServer().newWorkspace()));
   ipcMain.handle(ipcChannels.workspaceOpen, openProject);
   ipcMain.handle(ipcChannels.workspaceRedo, () => getCoreServer().redoWorkspace());
+  ipcMain.handle(ipcChannels.workspaceRecoverMissingMedia, (_event, params) =>
+    getCoreServer().recoverMissingWorkspaceMedia(params),
+  );
   ipcMain.handle(ipcChannels.workspaceSave, saveProject);
   ipcMain.handle(ipcChannels.workspaceSaveAs, saveProjectAs);
   ipcMain.handle(ipcChannels.workspaceSaveTimelineClip, (_event, params) =>
@@ -235,9 +311,11 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.workspaceGet);
   ipcMain.removeHandler(ipcChannels.workspaceImportAudio);
   ipcMain.removeHandler(ipcChannels.workspaceMoveEntry);
+  ipcMain.removeHandler(ipcChannels.workspaceLocateMissingMedia);
   ipcMain.removeHandler(ipcChannels.workspaceNew);
   ipcMain.removeHandler(ipcChannels.workspaceOpen);
   ipcMain.removeHandler(ipcChannels.workspaceRedo);
+  ipcMain.removeHandler(ipcChannels.workspaceRecoverMissingMedia);
   ipcMain.removeHandler(ipcChannels.workspaceSave);
   ipcMain.removeHandler(ipcChannels.workspaceSaveAs);
   ipcMain.removeHandler(ipcChannels.workspaceSaveTimelineClip);
@@ -251,6 +329,8 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.windowMinimize);
   ipcMain.removeHandler(ipcChannels.windowToggleMaximize);
   ipcMain.removeHandler(ipcChannels.windowClose);
+  workspaceWatcher?.close();
+  workspaceWatcher = null;
   coreServer?.stop();
   coreServer = null;
 });

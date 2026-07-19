@@ -10,6 +10,8 @@ mod import_audio;
 mod move_entry;
 mod new;
 mod open;
+mod reconcile_moved_files;
+mod recover_missing_media;
 mod redo;
 mod save;
 mod save_as;
@@ -34,6 +36,12 @@ pub use import_audio::{ImportWorkspaceAudio, ImportWorkspaceAudioParams};
 pub use move_entry::{MoveWorkspaceEntry, MoveWorkspaceEntryParams};
 pub use new::{NewWorkspace, NewWorkspaceParams};
 pub use open::{OpenWorkspace, OpenWorkspaceParams};
+pub use reconcile_moved_files::{
+    ReconcileMovedWorkspaceFiles, ReconcileMovedWorkspaceFilesParams, WorkspaceFileMove,
+};
+pub use recover_missing_media::{
+    MissingMediaAction, RecoverMissingWorkspaceMedia, RecoverMissingWorkspaceMediaParams,
+};
 pub use redo::{RedoWorkspace, RedoWorkspaceParams};
 pub use save::{SaveWorkspace, SaveWorkspaceParams};
 pub use save_as::{SaveWorkspaceAs, SaveWorkspaceAsParams};
@@ -65,8 +73,18 @@ pub struct WorkspaceSnapshot {
     #[ts(inline)]
     pub timeline: TimelineSnapshot,
     #[ts(inline)]
+    pub missing_media: Vec<MissingMediaSource>,
+    #[ts(inline)]
     pub history: WorkspaceHistorySnapshot,
     pub is_dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct MissingMediaSource {
+    pub source_path: String,
+    pub clip_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, JsonSchema, TS)]
@@ -251,6 +269,8 @@ pub(crate) fn methods() -> Vec<ContractMethod> {
         describe::<MoveWorkspaceEntry>(),
         describe::<NewWorkspace>(),
         describe::<OpenWorkspace>(),
+        describe::<ReconcileMovedWorkspaceFiles>(),
+        describe::<RecoverMissingWorkspaceMedia>(),
         describe::<RedoWorkspace>(),
         describe::<SaveWorkspace>(),
         describe::<SaveWorkspaceAs>(),

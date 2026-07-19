@@ -5,6 +5,7 @@ import type {
   ConnectMixPortsParams,
   DisconnectMixPortsParams,
   LibrarySnapshot,
+  RecoverMissingMediaParams,
   SaveTimelineClipParams,
   SaveTimelineTrackParams,
   SetTimelineSettingsParams,
@@ -24,6 +25,7 @@ interface AppState {
   library: LibrarySnapshot | null;
   workspace: WorkspaceSnapshot | null;
   operationError: string | null;
+  applyWorkspaceUpdate(workspace: WorkspaceSnapshot): void;
   connect(): Promise<void>;
   createWorkspaceDirectory(path: string): Promise<boolean>;
   addAudioClip(params: AddAudioClipParams): Promise<boolean>;
@@ -33,12 +35,17 @@ interface AppState {
   deleteTimelineTrack(id: string): Promise<boolean>;
   disconnectMixPorts(params: DisconnectMixPortsParams): Promise<boolean>;
   importAudioFiles(files: File[], targetDirectory: string): Promise<string[]>;
+  locateMissingMedia(sourcePath: string): Promise<boolean>;
   moveWorkspaceEntry(sourcePath: string, destinationPath: string): Promise<boolean>;
   pinFolder(): Promise<boolean>;
   unpinFolder(id: string): Promise<boolean>;
   newProject(): Promise<void>;
   openProject(): Promise<void>;
   redo(): Promise<boolean>;
+  recoverMissingMedia(
+    sourcePath: string,
+    action: Extract<RecoverMissingMediaParams["action"], "leaveEmpty" | "deleteClips">,
+  ): Promise<boolean>;
   saveProject(): Promise<void>;
   saveProjectAs(): Promise<void>;
   saveTimelineClip(params: SaveTimelineClipParams): Promise<boolean>;
@@ -56,6 +63,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   library: null,
   workspace: null,
   operationError: null,
+  applyWorkspaceUpdate(workspace) {
+    set({ workspace, operationError: null });
+    void useTransportStore.getState().refresh();
+  },
   async connect() {
     set({ serverStatus: "connecting", operationError: null });
     try {
@@ -105,6 +116,9 @@ export const useAppStore = create<AppState>((set, get) => ({
       return [];
     }
   },
+  async locateMissingMedia(sourcePath) {
+    return updateWorkspace(set, () => window.kickHatSnare.locateMissingMedia(sourcePath));
+  },
   async moveWorkspaceEntry(sourcePath, destinationPath) {
     return updateWorkspace(set, () =>
       window.kickHatSnare.moveWorkspaceEntry(sourcePath, destinationPath),
@@ -125,6 +139,15 @@ export const useAppStore = create<AppState>((set, get) => ({
   async redo() {
     if (!get().workspace?.history.canRedo) return false;
     return updateWorkspace(set, () => window.kickHatSnare.redoWorkspace());
+  },
+  async recoverMissingMedia(sourcePath, action) {
+    return updateWorkspace(set, () =>
+      window.kickHatSnare.recoverMissingMedia({
+        sourcePath,
+        action,
+        replacementPath: null,
+      }),
+    );
   },
   async saveProject() {
     await updateWorkspace(set, () => window.kickHatSnare.saveProject());

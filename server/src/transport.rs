@@ -53,21 +53,21 @@ mod tests {
 
     #[test]
     fn handles_a_ping_request() {
-        let input = b"{\"protocolVersion\":13,\"id\":7,\"method\":\"system.ping\",\"params\":{}}\n";
+        let input = b"{\"protocolVersion\":14,\"id\":7,\"method\":\"system.ping\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":13,\"id\":7,\"result\":\"ready\"}\n"
+            "{\"protocolVersion\":14,\"id\":7,\"result\":\"ready\"}\n"
         );
     }
 
     #[test]
     fn returns_the_initial_workspace_snapshot() {
         let input =
-            b"{\"protocolVersion\":13,\"id\":10,\"method\":\"workspace.get\",\"params\":{}}\n";
+            b"{\"protocolVersion\":14,\"id\":10,\"method\":\"workspace.get\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
@@ -106,23 +106,23 @@ mod tests {
     #[test]
     fn returns_the_initial_library_snapshot() {
         let input =
-            b"{\"protocolVersion\":13,\"id\":11,\"method\":\"library.get\",\"params\":{}}\n";
+            b"{\"protocolVersion\":14,\"id\":11,\"method\":\"library.get\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":13,\"id\":11,\"result\":{\"pinnedFolders\":[]}}\n"
+            "{\"protocolVersion\":14,\"id\":11,\"result\":{\"pinnedFolders\":[]}}\n"
         );
     }
 
     #[test]
     fn returns_and_updates_registered_settings() {
         let input = concat!(
-            "{\"protocolVersion\":13,\"id\":30,\"method\":\"settings.get\",\"params\":{}}\n",
-            "{\"protocolVersion\":13,\"id\":31,\"method\":\"settings.set\",\"params\":{\"id\":\"audio.bufferSize\",\"value\":{\"kind\":\"integer\",\"value\":1024}}}\n",
-            "{\"protocolVersion\":13,\"id\":32,\"method\":\"settings.get\",\"params\":{}}\n",
+            "{\"protocolVersion\":14,\"id\":30,\"method\":\"settings.get\",\"params\":{}}\n",
+            "{\"protocolVersion\":14,\"id\":31,\"method\":\"settings.set\",\"params\":{\"id\":\"audio.bufferSize\",\"value\":{\"kind\":\"integer\",\"value\":1024}}}\n",
+            "{\"protocolVersion\":14,\"id\":32,\"method\":\"settings.get\",\"params\":{}}\n",
         );
         let mut output = Vec::new();
 
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn routes_timeline_mutations_and_returns_the_updated_project() {
-        let input = b"{\"protocolVersion\":13,\"id\":12,\"method\":\"workspace.saveTimelineTrack\",\"params\":{\"id\":null,\"name\":\"Drums\",\"isMuted\":false,\"isSoloed\":false,\"gainDb\":0.0,\"pan\":0.0}}\n";
+        let input = b"{\"protocolVersion\":14,\"id\":12,\"method\":\"workspace.saveTimelineTrack\",\"params\":{\"id\":null,\"name\":\"Drums\",\"isMuted\":false,\"isSoloed\":false,\"gainDb\":0.0,\"pan\":0.0}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
@@ -179,8 +179,8 @@ mod tests {
     #[test]
     fn routes_clip_splits_as_one_timeline_transaction() {
         let input = concat!(
-            "{\"protocolVersion\":13,\"id\":13,\"method\":\"workspace.saveTimelineClip\",\"params\":{\"id\":null,\"trackId\":\"track-1\",\"name\":\"Region\",\"startTick\":0,\"durationTicks\":1920,\"sourceOffsetTicks\":0,\"sourceDurationTicks\":1920,\"resizeMode\":\"trim\"}}\n",
-            "{\"protocolVersion\":13,\"id\":14,\"method\":\"workspace.splitTimelineClip\",\"params\":{\"id\":\"clip-1\",\"splitTick\":960}}\n",
+            "{\"protocolVersion\":14,\"id\":13,\"method\":\"workspace.saveTimelineClip\",\"params\":{\"id\":null,\"trackId\":\"track-1\",\"name\":\"Region\",\"startTick\":0,\"durationTicks\":1920,\"sourceOffsetTicks\":0,\"sourceDurationTicks\":1920,\"resizeMode\":\"trim\"}}\n",
+            "{\"protocolVersion\":14,\"id\":14,\"method\":\"workspace.splitTimelineClip\",\"params\":{\"id\":\"clip-1\",\"splitTick\":960}}\n",
         );
         let mut output = Vec::new();
 
@@ -208,9 +208,9 @@ mod tests {
     #[test]
     fn routes_undo_and_redo_transactions() {
         let input = concat!(
-            "{\"protocolVersion\":13,\"id\":20,\"method\":\"workspace.saveTimelineTrack\",\"params\":{\"id\":null,\"name\":\"Drums\",\"isMuted\":false,\"isSoloed\":false,\"gainDb\":0.0,\"pan\":0.0}}\n",
-            "{\"protocolVersion\":13,\"id\":21,\"method\":\"workspace.undo\",\"params\":{}}\n",
-            "{\"protocolVersion\":13,\"id\":22,\"method\":\"workspace.redo\",\"params\":{}}\n",
+            "{\"protocolVersion\":14,\"id\":20,\"method\":\"workspace.saveTimelineTrack\",\"params\":{\"id\":null,\"name\":\"Drums\",\"isMuted\":false,\"isSoloed\":false,\"gainDb\":0.0,\"pan\":0.0}}\n",
+            "{\"protocolVersion\":14,\"id\":21,\"method\":\"workspace.undo\",\"params\":{}}\n",
+            "{\"protocolVersion\":14,\"id\":22,\"method\":\"workspace.redo\",\"params\":{}}\n",
         );
         let mut output = Vec::new();
 
@@ -241,14 +241,14 @@ mod tests {
     #[test]
     fn routes_feature_domains_independently() {
         let input =
-            b"{\"protocolVersion\":13,\"id\":8,\"method\":\"audio.unknown\",\"params\":{}}\n";
+            b"{\"protocolVersion\":14,\"id\":8,\"method\":\"audio.unknown\",\"params\":{}}\n";
         let mut output = Vec::new();
 
         serve(input.as_slice(), &mut output, &mut Core::new()).expect("request should succeed");
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":13,\"id\":8,\"error\":{\"code\":\"METHOD_NOT_FOUND\",\"message\":\"unknown audio method: unknown\"}}\n"
+            "{\"protocolVersion\":14,\"id\":8,\"error\":{\"code\":\"METHOD_NOT_FOUND\",\"message\":\"unknown audio method: unknown\"}}\n"
         );
     }
 
@@ -261,7 +261,7 @@ mod tests {
 
         assert_eq!(
             String::from_utf8(output).expect("response should be UTF-8"),
-            "{\"protocolVersion\":13,\"id\":9,\"error\":{\"code\":\"PROTOCOL_VERSION_MISMATCH\",\"message\":\"expected protocol version 13, received 12\"}}\n"
+            "{\"protocolVersion\":14,\"id\":9,\"error\":{\"code\":\"PROTOCOL_VERSION_MISMATCH\",\"message\":\"expected protocol version 14, received 12\"}}\n"
         );
     }
 }

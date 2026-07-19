@@ -10,6 +10,8 @@ mod import_audio;
 mod move_entry;
 mod new;
 mod open;
+mod reconcile_moved_files;
+mod recover_missing_media;
 mod redo;
 mod save;
 mod save_as;
@@ -28,7 +30,8 @@ use kickhatsnare_protocol::{
     workspace::{
         AddAudioClip, ConnectMixPorts, CreateWorkspaceDirectory, DeleteTimelineClip,
         DeleteTimelineTrack, DeleteWorkspaceEntry, DisconnectMixPorts, GetWorkspace,
-        ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace, OpenWorkspace, RedoWorkspace,
+        ImportWorkspaceAudio, MoveWorkspaceEntry, NewWorkspace, OpenWorkspace,
+        ReconcileMovedWorkspaceFiles, RecoverMissingWorkspaceMedia, RedoWorkspace,
         SaveTimelineClip, SaveTimelineTrack, SaveWorkspace, SaveWorkspaceAs, SetMasterMix,
         SetMixNodePosition, SetTimelineClipProperties, SetTimelineSettings, SplitTimelineClip,
         UndoWorkspace,
@@ -57,6 +60,10 @@ pub(super) fn dispatch(
         MoveWorkspaceEntry::NAME => move_entry::handle(params, core.workspaces()),
         NewWorkspace::NAME => new::handle(params, core.workspaces()),
         OpenWorkspace::NAME => open::handle(params, core.workspaces()),
+        ReconcileMovedWorkspaceFiles::NAME => {
+            reconcile_moved_files::handle(params, core.workspaces())
+        }
+        RecoverMissingWorkspaceMedia::NAME => recover_missing_media::handle(params, core),
         RedoWorkspace::NAME => redo::handle(params, core.workspaces()),
         SaveWorkspace::NAME => save::handle(params, core.workspaces()),
         SaveWorkspaceAs::NAME => save_as::handle(params, core.workspaces()),
@@ -82,12 +89,14 @@ pub(super) fn dispatch(
             | SaveTimelineClip::NAME
             | SetTimelineClipProperties::NAME
             | SplitTimelineClip::NAME => {
-                core.refresh_audio_timeline()
-                    .map_err(|error| core_error(&error))?;
+                refresh_audio_timeline(core)?;
             }
             NewWorkspace::NAME | OpenWorkspace::NAME => {
                 core.invalidate_audio();
             }
+            MoveWorkspaceEntry::NAME
+            | ReconcileMovedWorkspaceFiles::NAME
+            | RecoverMissingWorkspaceMedia::NAME => refresh_audio_timeline(core)?,
             RedoWorkspace::NAME
             | SaveTimelineTrack::NAME
             | SetTimelineSettings::NAME
@@ -97,14 +106,23 @@ pub(super) fn dispatch(
                     core.sync_audio_mix().map_err(|error| core_error(&error))?;
                 }
                 WorkspaceEditImpact::Timeline => {
-                    core.refresh_audio_timeline()
-                        .map_err(|error| core_error(&error))?;
+                    refresh_audio_timeline(core)?;
                 }
             },
             _ => {}
         }
     }
     result
+}
+
+fn refresh_audio_timeline(core: &mut Core) -> Result<(), ApiError> {
+    if core.workspaces().has_missing_media() {
+        core.invalidate_audio();
+        Ok(())
+    } else {
+        core.refresh_audio_timeline()
+            .map_err(|error| core_error(&error))
+    }
 }
 
 fn serialize_snapshot(
@@ -183,6 +201,16 @@ fn serialize_snapshot(
                 })
                 .collect(),
         },
+        missing_media: snapshot
+            .missing_media
+            .into_iter()
+            .map(
+                |source| kickhatsnare_protocol::workspace::MissingMediaSource {
+                    source_path: source.source_path,
+                    clip_ids: source.clip_ids,
+                },
+            )
+            .collect(),
         history: serialize_history(snapshot.history),
         is_dirty: snapshot.is_dirty,
     };

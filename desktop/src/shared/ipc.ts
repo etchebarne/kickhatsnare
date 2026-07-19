@@ -16,6 +16,8 @@ export type SetMasterMixParams = ParamsFor<"workspace.setMasterMix">;
 export type SetMixNodePositionParams = ParamsFor<"workspace.setMixNodePosition">;
 export type SetTimelineClipPropertiesParams = ParamsFor<"workspace.setTimelineClipProperties">;
 export type SplitTimelineClipParams = ParamsFor<"workspace.splitTimelineClip">;
+export type RecoverMissingMediaParams = ParamsFor<"workspace.recoverMissingMedia">;
+export type WorkspaceFileMove = ParamsFor<"workspace.reconcileMovedFiles">["moves"][number];
 export type TransportSnapshot = ResultFor<"audio.getTransport">;
 
 export const ipcChannels = {
@@ -40,9 +42,12 @@ export const ipcChannels = {
   workspaceGet: "workspace:get",
   workspaceImportAudio: "workspace:import-audio",
   workspaceMoveEntry: "workspace:move-entry",
+  workspaceChanged: "workspace:changed",
+  workspaceLocateMissingMedia: "workspace:locate-missing-media",
   workspaceNew: "workspace:new",
   workspaceOpen: "workspace:open",
   workspaceRedo: "workspace:redo",
+  workspaceRecoverMissingMedia: "workspace:recover-missing-media",
   workspaceSave: "workspace:save",
   workspaceSaveAs: "workspace:save-as",
   workspaceSaveTimelineClip: "workspace:save-timeline-clip",
@@ -80,9 +85,12 @@ export interface KickHatSnareApi {
   getWorkspace(): Promise<WorkspaceSnapshot>;
   importAudioFiles(files: File[], targetDirectory: string): Promise<WorkspaceSnapshot>;
   moveWorkspaceEntry(sourcePath: string, destinationPath: string): Promise<WorkspaceSnapshot>;
+  onWorkspaceChanged(listener: (workspace: WorkspaceSnapshot) => void): () => void;
+  locateMissingMedia(sourcePath: string): Promise<WorkspaceSnapshot | null>;
   newProject(): Promise<WorkspaceSnapshot>;
   openProject(): Promise<WorkspaceSnapshot | null>;
   redoWorkspace(): Promise<WorkspaceSnapshot>;
+  recoverMissingMedia(params: RecoverMissingMediaParams): Promise<WorkspaceSnapshot>;
   saveProject(): Promise<WorkspaceSnapshot | null>;
   saveProjectAs(): Promise<WorkspaceSnapshot | null>;
   saveTimelineClip(params: SaveTimelineClipParams): Promise<WorkspaceSnapshot>;

@@ -191,6 +191,18 @@ export class CoreServer {
     return this.#request("workspace.moveEntry", { sourcePath, destinationPath });
   }
 
+  reconcileMovedWorkspaceFiles(
+    moves: ParamsFor<"workspace.reconcileMovedFiles">["moves"],
+  ): Promise<ResultFor<"workspace.reconcileMovedFiles">> {
+    return this.#request("workspace.reconcileMovedFiles", { moves });
+  }
+
+  recoverMissingWorkspaceMedia(
+    params: ParamsFor<"workspace.recoverMissingMedia">,
+  ): Promise<ResultFor<"workspace.recoverMissingMedia">> {
+    return this.#request("workspace.recoverMissingMedia", params);
+  }
+
   newWorkspace(): Promise<ResultFor<"workspace.new">> {
     return this.#request("workspace.new", {});
   }

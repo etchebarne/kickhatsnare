@@ -3,6 +3,7 @@ use std::{
     fs::{self, File},
     io::{self, Write},
     path::{Component, Path, PathBuf},
+    sync::Arc,
 };
 
 use serde::{Deserialize, Serialize};
@@ -85,8 +86,21 @@ pub struct WorkspaceSnapshot {
     pub project_file_path: Option<PathBuf>,
     pub files: Vec<String>,
     pub timeline: TimelineSnapshot,
+    pub missing_media: Vec<MissingMediaSource>,
     pub history: WorkspaceHistorySnapshot,
     pub is_dirty: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MissingMediaSource {
+    pub source_path: String,
+    pub clip_ids: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MissingMediaRecovery {
+    LeaveEmpty,
+    DeleteClips,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -274,6 +288,79 @@ impl EditHistory {
         changed
     }
 
+    fn move_source_files(&mut self, moves: &[(String, String)]) -> bool {
+        let mut changed = false;
+        for state in self.undo.iter_mut().chain(&mut self.redo) {
+            changed |= state.timeline.move_source_files(moves);
+        }
+        changed
+    }
+
+    fn validate_source_replacement(
+        &self,
+        source_path: &str,
+        duration_seconds: f64,
+    ) -> Result<(), CoreError> {
+        for state in self.undo.iter().chain(&self.redo) {
+            state
+                .timeline
+                .validate_source_replacement(source_path, duration_seconds)?;
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn replace_source(
+        &mut self,
+        source_path: &str,
+        replacement_path: &str,
+        sample_rate: u32,
+        channels: u16,
+        duration_seconds: f64,
+        waveform: &Arc<Vec<f32>>,
+    ) {
+        for state in self.undo.iter_mut().chain(&mut self.redo) {
+            state.timeline.replace_source(
+                source_path,
+                replacement_path,
+                sample_rate,
+                channels,
+                duration_seconds,
+                waveform,
+            );
+        }
+    }
+
+    fn recover_source(&mut self, source_path: &str, recovery: MissingMediaRecovery) {
+        for state in self.undo.iter_mut().chain(&mut self.redo) {
+            match recovery {
+                MissingMediaRecovery::LeaveEmpty => {
+                    state.timeline.clear_source(source_path);
+                }
+                MissingMediaRecovery::DeleteClips => {
+                    state.timeline.delete_source_clips(source_path);
+                }
+            }
+        }
+    }
+
+    fn prune_noop_states(&mut self, timeline: &Timeline) {
+        while self
+            .undo
+            .back()
+            .is_some_and(|state| state.timeline == *timeline)
+        {
+            self.undo.pop_back();
+        }
+        while self
+            .redo
+            .last()
+            .is_some_and(|state| state.timeline == *timeline)
+        {
+            self.redo.pop();
+        }
+    }
+
     fn is_dirty(&self) -> bool {
         self.current_revision != self.saved_revision
     }
@@ -369,15 +456,40 @@ impl Workspaces {
             files
         };
 
+        let missing_media = self
+            .active
+            .timeline
+            .source_references()
+            .into_iter()
+            .filter_map(|(source_path, clip_ids)| {
+                self.resolve_audio_source(&source_path)
+                    .is_err()
+                    .then_some(MissingMediaSource {
+                        source_path,
+                        clip_ids,
+                    })
+            })
+            .collect();
+
         Ok(WorkspaceSnapshot {
             name: self.active.name.clone(),
             root_path: self.active.root_path.clone(),
             project_file_path: self.active.project_file_path.clone(),
             files,
             timeline: self.active.timeline.snapshot(),
+            missing_media,
             history: self.active.history.snapshot(),
             is_dirty: self.active.is_dirty,
         })
+    }
+
+    #[must_use]
+    pub fn has_missing_media(&self) -> bool {
+        self.active
+            .timeline
+            .source_references()
+            .keys()
+            .any(|source_path| self.resolve_audio_source(source_path).is_err())
     }
 
     /// Builds a playback projection with all project-relative sources resolved.
@@ -441,9 +553,18 @@ impl Workspaces {
         let relative_path = validate_entry_path(Path::new(relative_path))?;
         if let Some(root_path) = self.active.root_path.as_deref() {
             let path = workspace_entry_path(root_path, &relative_path)?;
-            if !path.is_file() {
-                return Err(CoreError::new(format!(
+            let canonical_root = fs::canonicalize(root_path).map_err(|error| {
+                CoreError::new(format!("failed to resolve project directory: {error}"))
+            })?;
+            let path = fs::canonicalize(&path).map_err(|_| {
+                CoreError::new(format!(
                     "audio source is missing: {}",
+                    relative_path.display()
+                ))
+            })?;
+            if !path.starts_with(&canonical_root) || !path.is_file() {
+                return Err(CoreError::new(format!(
+                    "audio source must be a file inside the project: {}",
                     relative_path.display()
                 )));
             }
@@ -837,6 +958,154 @@ impl Workspaces {
         self.active.refresh_dirty();
 
         self.snapshot()
+    }
+
+    /// Rewrites source references after files were moved outside the application.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if a path is invalid, the old file still exists, or the new file is
+    /// missing or outside the active project.
+    pub fn reconcile_moved_files(
+        &mut self,
+        moves: impl IntoIterator<Item = (PathBuf, PathBuf)>,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        let root_path = self
+            .active
+            .root_path
+            .as_deref()
+            .ok_or_else(|| CoreError::new("project has not been saved yet"))?;
+        let mut validated = Vec::new();
+        let mut sources = HashSet::new();
+        for (source_path, destination_path) in moves {
+            let source_path = validate_entry_path(&source_path)?;
+            let destination_path = validate_entry_path(&destination_path)?;
+            if source_path == destination_path {
+                continue;
+            }
+            let source = relative_path_string(&source_path);
+            if !sources.insert(source.clone()) {
+                return Err(CoreError::new(
+                    "a moved source path was provided more than once",
+                ));
+            }
+            if root_path.join(&source_path).exists() {
+                return Err(CoreError::new(format!(
+                    "moved source still exists: {}",
+                    source_path.display()
+                )));
+            }
+            let destination = relative_path_string(&destination_path);
+            self.resolve_audio_source(&destination)?;
+            validated.push((source, destination));
+        }
+
+        let source_path_changed = self.active.timeline.move_source_files(&validated);
+        self.active.history.move_source_files(&validated);
+        if source_path_changed {
+            self.active.non_timeline_dirty = true;
+            self.active.refresh_dirty();
+        }
+        self.snapshot()
+    }
+
+    /// Replaces a missing source with analyzed audio already stored in the project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if either source is invalid, the replacement is outside the project, or
+    /// it is too short for an affected clip's source window.
+    #[allow(clippy::too_many_arguments)]
+    pub fn replace_missing_media(
+        &mut self,
+        source_path: &str,
+        replacement_path: &str,
+        sample_rate: u32,
+        channels: u16,
+        duration_seconds: f64,
+        waveform: Vec<f32>,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        let source_path = self.validate_missing_source(source_path)?;
+        let replacement_path =
+            relative_path_string(&validate_entry_path(Path::new(replacement_path))?);
+        self.resolve_audio_source(&replacement_path)?;
+        if sample_rate == 0 || !(1..=2).contains(&channels) {
+            return Err(CoreError::new("replacement audio metadata is invalid"));
+        }
+        if !duration_seconds.is_finite() || duration_seconds <= 0.0 {
+            return Err(CoreError::new("replacement audio duration is invalid"));
+        }
+        if waveform.len() > 2_048 || waveform.iter().any(|peak| !peak.is_finite()) {
+            return Err(CoreError::new("replacement audio waveform is invalid"));
+        }
+        self.active
+            .timeline
+            .validate_source_replacement(&source_path, duration_seconds)?;
+        self.active
+            .history
+            .validate_source_replacement(&source_path, duration_seconds)?;
+
+        let waveform = Arc::new(waveform);
+        self.active.timeline.replace_source(
+            &source_path,
+            &replacement_path,
+            sample_rate,
+            channels,
+            duration_seconds,
+            &waveform,
+        );
+        self.active.history.replace_source(
+            &source_path,
+            &replacement_path,
+            sample_rate,
+            channels,
+            duration_seconds,
+            &waveform,
+        );
+        self.active.mark_non_timeline_dirty();
+        self.snapshot()
+    }
+
+    /// Removes a missing source from every affected current and historical clip.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the source path is invalid, available, or not referenced.
+    pub fn recover_missing_media(
+        &mut self,
+        source_path: &str,
+        recovery: MissingMediaRecovery,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        let source_path = self.validate_missing_source(source_path)?;
+        match recovery {
+            MissingMediaRecovery::LeaveEmpty => {
+                self.active.timeline.clear_source(&source_path);
+                self.active.history.recover_source(&source_path, recovery);
+                self.active.history.prune_noop_states(&self.active.timeline);
+            }
+            MissingMediaRecovery::DeleteClips => {
+                self.active.timeline.delete_source_clips(&source_path);
+                self.active.history.clear();
+            }
+        }
+        self.active.mark_non_timeline_dirty();
+        self.snapshot()
+    }
+
+    fn validate_missing_source(&self, source_path: &str) -> Result<String, CoreError> {
+        let source_path = relative_path_string(&validate_entry_path(Path::new(source_path))?);
+        if !self
+            .active
+            .timeline
+            .source_references()
+            .contains_key(&source_path)
+        {
+            return Err(CoreError::new("missing audio source is not referenced"));
+        }
+        if self.resolve_audio_source(&source_path).is_ok() {
+            return Err(CoreError::new("audio source is no longer missing"));
+        }
+        Ok(source_path)
     }
 
     /// Updates the active project's musical timing and grid settings.
@@ -1500,7 +1769,10 @@ mod tests {
     use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::{ClipResizeMode, GridDivision, PROJECT_FILE_NAME, WorkspaceEditImpact, Workspaces};
+    use super::{
+        ClipResizeMode, GridDivision, MissingMediaRecovery, PROJECT_FILE_NAME, WorkspaceEditImpact,
+        Workspaces,
+    };
 
     #[test]
     fn starts_with_an_empty_unsaved_project_tree() {
@@ -2226,6 +2498,242 @@ mod tests {
         assert_eq!(
             moved.timeline.tracks[0].clips[0].source_path.as_deref(),
             Some("Renamed.wav")
+        );
+    }
+
+    #[test]
+    fn reconciles_external_file_moves_in_the_timeline_and_history() {
+        let sources = tempdir().expect("source directory should be created");
+        let source = sources.path().join("Kick.wav");
+        fs::write(&source, b"audio").expect("audio source should be created");
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("External Move");
+        let mut workspaces = Workspaces::new();
+        workspaces.save_as(&root).expect("project should save");
+        workspaces
+            .import_audio_files([source], "")
+            .expect("audio should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "Kick.wav",
+                0,
+                "Kick",
+                1_920,
+                48_000,
+                2,
+                1.0,
+                vec![0.5],
+            )
+            .expect("clip should be added");
+        workspaces
+            .split_timeline_clip("clip-1", 960)
+            .expect("clip should split");
+        workspaces.save().expect("project should save");
+        fs::create_dir(root.join("Drums")).expect("destination should be created");
+        fs::rename(root.join("Kick.wav"), root.join("Drums/Kick.wav"))
+            .expect("file should move externally");
+
+        let reconciled = workspaces
+            .reconcile_moved_files([("Kick.wav".into(), "Drums/Kick.wav".into())])
+            .expect("external move should reconcile");
+
+        assert!(reconciled.is_dirty);
+        assert!(reconciled.missing_media.is_empty());
+        assert!(
+            reconciled.timeline.tracks[0]
+                .clips
+                .iter()
+                .all(|clip| clip.source_path.as_deref() == Some("Drums/Kick.wav"))
+        );
+        let undone = workspaces.undo().expect("split should still undo");
+        assert_eq!(undone.timeline.tracks[0].clips.len(), 1);
+        assert_eq!(
+            undone.timeline.tracks[0].clips[0].source_path.as_deref(),
+            Some("Drums/Kick.wav")
+        );
+    }
+
+    #[test]
+    fn reports_missing_media_and_can_leave_affected_clips_empty() {
+        let sources = tempdir().expect("source directory should be created");
+        let source = sources.path().join("Snare.wav");
+        fs::write(&source, b"audio").expect("audio source should be created");
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("Missing Source");
+        let mut workspaces = Workspaces::new();
+        workspaces.save_as(&root).expect("project should save");
+        workspaces
+            .import_audio_files([source], "")
+            .expect("audio should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "Snare.wav",
+                0,
+                "Snare",
+                1_920,
+                48_000,
+                2,
+                1.0,
+                vec![0.5],
+            )
+            .expect("clip should be added");
+        workspaces
+            .split_timeline_clip("clip-1", 960)
+            .expect("clip should split");
+        fs::remove_file(root.join("Snare.wav")).expect("source should be removed externally");
+
+        let missing = workspaces.snapshot().expect("snapshot should succeed");
+        assert_eq!(missing.missing_media.len(), 1);
+        assert_eq!(missing.missing_media[0].source_path, "Snare.wav");
+        assert_eq!(missing.missing_media[0].clip_ids, ["clip-1", "clip-2"]);
+
+        let recovered = workspaces
+            .recover_missing_media("Snare.wav", MissingMediaRecovery::LeaveEmpty)
+            .expect("clips should become empty");
+        assert!(recovered.missing_media.is_empty());
+        assert!(
+            recovered.timeline.tracks[0]
+                .clips
+                .iter()
+                .all(|clip| clip.source_path.is_none() && clip.waveform.is_empty())
+        );
+        let undone = workspaces.undo().expect("split should still undo");
+        assert_eq!(undone.timeline.tracks[0].clips.len(), 1);
+        assert!(undone.timeline.tracks[0].clips[0].source_path.is_none());
+    }
+
+    #[test]
+    fn reports_media_that_becomes_missing_after_undo() {
+        let sources = tempdir().expect("source directory should be created");
+        let source = sources.path().join("Clap.wav");
+        fs::write(&source, b"audio").expect("audio source should be created");
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("Undo Missing");
+        let mut workspaces = Workspaces::new();
+        workspaces.save_as(&root).expect("project should save");
+        workspaces
+            .import_audio_files([source], "")
+            .expect("audio should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "Clap.wav",
+                0,
+                "Clap",
+                960,
+                48_000,
+                2,
+                0.5,
+                Vec::new(),
+            )
+            .expect("clip should be added");
+        workspaces
+            .delete_timeline_clip("clip-1")
+            .expect("clip should be deleted");
+        fs::remove_file(root.join("Clap.wav")).expect("source should be removed externally");
+        assert!(!workspaces.has_missing_media());
+
+        let undone = workspaces.undo().expect("clip deletion should undo");
+
+        assert!(workspaces.has_missing_media());
+        assert_eq!(undone.missing_media[0].source_path, "Clap.wav");
+    }
+
+    #[test]
+    fn deleting_missing_media_clips_also_removes_historical_references() {
+        let sources = tempdir().expect("source directory should be created");
+        let source = sources.path().join("Hat.wav");
+        fs::write(&source, b"audio").expect("audio source should be created");
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("Delete Missing");
+        let mut workspaces = Workspaces::new();
+        workspaces.save_as(&root).expect("project should save");
+        workspaces
+            .import_audio_files([source], "")
+            .expect("audio should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "Hat.wav",
+                0,
+                "Hat",
+                1_920,
+                48_000,
+                2,
+                1.0,
+                Vec::new(),
+            )
+            .expect("clip should be added");
+        workspaces
+            .split_timeline_clip("clip-1", 960)
+            .expect("clip should split");
+        fs::remove_file(root.join("Hat.wav")).expect("source should be removed externally");
+
+        let recovered = workspaces
+            .recover_missing_media("Hat.wav", MissingMediaRecovery::DeleteClips)
+            .expect("clips should be deleted");
+
+        assert!(recovered.timeline.tracks[0].clips.is_empty());
+        assert!(!recovered.history.can_undo);
+        assert!(workspaces.undo().is_err());
+    }
+
+    #[test]
+    fn replaces_missing_media_across_the_timeline_and_history() {
+        let sources = tempdir().expect("source directory should be created");
+        let original = sources.path().join("Original.wav");
+        let replacement = sources.path().join("Replacement.wav");
+        fs::write(&original, b"original").expect("original should be created");
+        fs::write(&replacement, b"replacement").expect("replacement should be created");
+        let parent = tempdir().expect("project parent should be created");
+        let root = parent.path().join("Replace Missing");
+        let mut workspaces = Workspaces::new();
+        workspaces.save_as(&root).expect("project should save");
+        workspaces
+            .import_audio_files([original, replacement], "")
+            .expect("audio should import");
+        workspaces
+            .add_audio_clip(
+                "track-1",
+                "Original.wav",
+                0,
+                "Original",
+                1_920,
+                48_000,
+                2,
+                1.0,
+                vec![0.25],
+            )
+            .expect("clip should be added");
+        workspaces
+            .split_timeline_clip("clip-1", 960)
+            .expect("clip should split");
+        fs::remove_file(root.join("Original.wav")).expect("source should be removed externally");
+
+        let recovered = workspaces
+            .replace_missing_media(
+                "Original.wav",
+                "Replacement.wav",
+                44_100,
+                1,
+                2.0,
+                vec![0.75],
+            )
+            .expect("source should be replaced");
+
+        assert!(recovered.missing_media.is_empty());
+        assert!(recovered.timeline.tracks[0].clips.iter().all(|clip| {
+            clip.source_path.as_deref() == Some("Replacement.wav")
+                && clip.source_sample_rate == 44_100
+                && clip.source_channels == 1
+                && clip.waveform == [0.75]
+        }));
+        let undone = workspaces.undo().expect("split should still undo");
+        assert_eq!(
+            undone.timeline.tracks[0].clips[0].source_path.as_deref(),
+            Some("Replacement.wav")
         );
     }
 }

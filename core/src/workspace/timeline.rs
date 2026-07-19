@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     path::Path,
 };
 
@@ -921,6 +921,19 @@ impl Timeline {
             })
     }
 
+    pub(super) fn source_references(&self) -> BTreeMap<String, Vec<String>> {
+        let mut references = BTreeMap::<String, Vec<String>>::new();
+        for clip in self.tracks.iter().flat_map(|track| &track.clips) {
+            if let Some(source_path) = &clip.source_path {
+                references
+                    .entry(source_path.clone())
+                    .or_default()
+                    .push(clip.id.clone());
+            }
+        }
+        references
+    }
+
     pub(super) fn move_source_paths(&mut self, source: &Path, destination: &Path) -> bool {
         let mut changed = false;
         for clip in self.tracks.iter_mut().flat_map(|track| &mut track.clips) {
@@ -938,6 +951,112 @@ impl Timeline {
             }
         }
         changed
+    }
+
+    pub(super) fn move_source_files(&mut self, moves: &[(String, String)]) -> bool {
+        let mut changed = false;
+        for clip in self.tracks.iter_mut().flat_map(|track| &mut track.clips) {
+            let Some(source_path) = clip.source_path.as_deref() else {
+                continue;
+            };
+            if let Some((_, destination)) = moves.iter().find(|(source, _)| source == source_path) {
+                clip.source_path = Some(destination.clone());
+                changed = true;
+            }
+        }
+        changed
+    }
+
+    pub(super) fn validate_source_replacement(
+        &self,
+        source_path: &str,
+        duration_seconds: f64,
+    ) -> Result<(), CoreError> {
+        let source_ticks = seconds_to_ticks(duration_seconds, self.bpm);
+        for clip in self
+            .tracks
+            .iter()
+            .flat_map(|track| &track.clips)
+            .filter(|clip| clip.source_path.as_deref() == Some(source_path))
+        {
+            if clip
+                .source_offset_ticks
+                .saturating_add(clip.source_duration_ticks)
+                > source_ticks
+            {
+                return Err(CoreError::new(format!(
+                    "replacement audio is too short for clip {}",
+                    clip.name
+                )));
+            }
+        }
+        Ok(())
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn replace_source(
+        &mut self,
+        source_path: &str,
+        replacement_path: &str,
+        sample_rate: u32,
+        channels: u16,
+        duration_seconds: f64,
+        waveform: &Arc<Vec<f32>>,
+    ) -> bool {
+        let mut changed = false;
+        for clip in self
+            .tracks
+            .iter_mut()
+            .flat_map(|track| &mut track.clips)
+            .filter(|clip| clip.source_path.as_deref() == Some(source_path))
+        {
+            clip.source_path = Some(replacement_path.to_owned());
+            clip.source_sample_rate = sample_rate;
+            clip.source_channels = channels;
+            clip.source_duration_seconds = duration_seconds;
+            clip.waveform = Arc::clone(waveform);
+            changed = true;
+        }
+        changed
+    }
+
+    pub(super) fn clear_source(&mut self, source_path: &str) -> bool {
+        let mut changed = false;
+        for clip in self
+            .tracks
+            .iter_mut()
+            .flat_map(|track| &mut track.clips)
+            .filter(|clip| clip.source_path.as_deref() == Some(source_path))
+        {
+            clip.source_path = None;
+            clip.source_offset_ticks = 0;
+            clip.source_duration_ticks = clip.duration_ticks;
+            clip.source_sample_rate = 0;
+            clip.source_channels = 0;
+            clip.source_duration_seconds = 0.0;
+            clip.waveform = Arc::new(Vec::new());
+            changed = true;
+        }
+        changed
+    }
+
+    pub(super) fn delete_source_clips(&mut self, source_path: &str) -> bool {
+        let previous_count = self
+            .tracks
+            .iter()
+            .map(|track| track.clips.len())
+            .sum::<usize>();
+        for track in &mut self.tracks {
+            track
+                .clips
+                .retain(|clip| clip.source_path.as_deref() != Some(source_path));
+        }
+        previous_count
+            != self
+                .tracks
+                .iter()
+                .map(|track| track.clips.len())
+                .sum::<usize>()
     }
 
     fn next_track_id(&mut self) -> Result<String, CoreError> {

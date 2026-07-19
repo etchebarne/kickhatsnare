@@ -1,4 +1,4 @@
-use std::{fmt, path::Path};
+use std::{fmt, fs, path::Path};
 
 use crate::{
     audio::{Audio, TransportSnapshot, TransportState},
@@ -161,6 +161,45 @@ impl Core {
         let project = self.workspaces.playback_project()?;
         self.audio.refresh_timeline(&project, resume_if_at_end)?;
         Ok(snapshot)
+    }
+
+    /// Replaces a missing timeline source with an audio file inside the active project.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the replacement cannot be resolved, decoded, or used by every
+    /// affected clip.
+    pub fn replace_missing_media(
+        &mut self,
+        source_path: &str,
+        replacement_path: &str,
+    ) -> Result<WorkspaceSnapshot, CoreError> {
+        let path = self.workspaces.resolve_audio_source(replacement_path)?;
+        let before = fs::metadata(&path).map_err(|error| {
+            CoreError::new(format!("failed to inspect replacement audio: {error}"))
+        })?;
+        let analysis = Audio::analyze(&path)?;
+        let after = fs::metadata(&path).map_err(|error| {
+            CoreError::new(format!("failed to inspect replacement audio: {error}"))
+        })?;
+        if before.len() != after.len() || before.modified().ok() != after.modified().ok() {
+            return Err(CoreError::new(
+                "replacement audio changed while it was being analyzed",
+            ));
+        }
+        if self.workspaces.resolve_audio_source(replacement_path)? != path {
+            return Err(CoreError::new(
+                "replacement audio moved while it was being analyzed",
+            ));
+        }
+        self.workspaces.replace_missing_media(
+            source_path,
+            replacement_path,
+            analysis.sample_rate,
+            analysis.channels,
+            analysis.duration_seconds,
+            analysis.waveform,
+        )
     }
 
     /// Starts or resumes timeline playback.

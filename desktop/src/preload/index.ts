@@ -33,9 +33,21 @@ const api: KickHatSnareApi = {
     }),
   moveWorkspaceEntry: (sourcePath, destinationPath) =>
     ipcRenderer.invoke(ipcChannels.workspaceMoveEntry, sourcePath, destinationPath),
+  onWorkspaceChanged: (listener) => {
+    const handleChange = (
+      _event: Electron.IpcRendererEvent,
+      workspace: Parameters<typeof listener>[0],
+    ) => listener(workspace);
+    ipcRenderer.on(ipcChannels.workspaceChanged, handleChange);
+    return () => ipcRenderer.removeListener(ipcChannels.workspaceChanged, handleChange);
+  },
+  locateMissingMedia: (sourcePath) =>
+    ipcRenderer.invoke(ipcChannels.workspaceLocateMissingMedia, sourcePath),
   newProject: () => ipcRenderer.invoke(ipcChannels.workspaceNew),
   openProject: () => ipcRenderer.invoke(ipcChannels.workspaceOpen),
   redoWorkspace: () => ipcRenderer.invoke(ipcChannels.workspaceRedo),
+  recoverMissingMedia: (params) =>
+    ipcRenderer.invoke(ipcChannels.workspaceRecoverMissingMedia, params),
   saveProject: () => ipcRenderer.invoke(ipcChannels.workspaceSave),
   saveProjectAs: () => ipcRenderer.invoke(ipcChannels.workspaceSaveAs),
   saveTimelineClip: (params) => ipcRenderer.invoke(ipcChannels.workspaceSaveTimelineClip, params),

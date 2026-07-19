@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Network, Rows3 } from "lucide-react";
 
 import { MixGraphEditor } from "@/components/custom/mix-graph";
+import { MissingMediaDialog } from "@/components/custom/missing-media";
 import { ProjectSidebar } from "@/components/custom/project-sidebar";
 import { SettingsDialog } from "@/components/custom/settings";
 import {
@@ -20,6 +21,7 @@ export function App() {
   const serverStatus = useAppStore((state) => state.serverStatus);
   const workspace = useAppStore((state) => state.workspace);
   const operationError = useAppStore((state) => state.operationError);
+  const applyWorkspaceUpdate = useAppStore((state) => state.applyWorkspaceUpdate);
   const connect = useAppStore((state) => state.connect);
   const newProject = useAppStore((state) => state.newProject);
   const openProject = useAppStore((state) => state.openProject);
@@ -31,6 +33,11 @@ export function App() {
   useEffect(() => {
     void connect();
   }, [connect]);
+
+  useEffect(
+    () => window.kickHatSnare.onWorkspaceChanged(applyWorkspaceUpdate),
+    [applyWorkspaceUpdate],
+  );
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
@@ -140,6 +147,7 @@ export function App() {
         </ResizablePanel>
       </ResizablePanelGroup>
       <SettingsDialog />
+      <MissingMediaDialog />
     </div>
   );
 }
