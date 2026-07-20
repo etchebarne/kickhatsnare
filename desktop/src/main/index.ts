@@ -203,6 +203,9 @@ app.whenReady().then(async () => {
   ipcMain.handle(ipcChannels.audioSeek, (_event, positionTick: number) =>
     getCoreServer().seekAudio({ positionTick }),
   );
+  ipcMain.handle(ipcChannels.audioSetLoopRegion, (_event, region) =>
+    getCoreServer().setLoopRegion({ region }),
+  );
   ipcMain.handle(ipcChannels.audioStop, () => getCoreServer().stopAudio());
   ipcMain.handle(ipcChannels.ping, () => getCoreServer().ping());
   ipcMain.handle(ipcChannels.libraryGet, () => getCoreServer().getLibrary());
@@ -294,6 +297,7 @@ app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.audioPause);
   ipcMain.removeHandler(ipcChannels.audioPlay);
   ipcMain.removeHandler(ipcChannels.audioSeek);
+  ipcMain.removeHandler(ipcChannels.audioSetLoopRegion);
   ipcMain.removeHandler(ipcChannels.audioStop);
   ipcMain.removeHandler(ipcChannels.ping);
   ipcMain.removeHandler(ipcChannels.libraryGet);

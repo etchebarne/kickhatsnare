@@ -21,11 +21,13 @@ use crate::{
 };
 
 pub const NO_SEEK: u64 = u64::MAX;
+pub const NO_LOOP_REGION: u64 = u64::MAX;
 
 const DECODE_BLOCK_FRAMES: u64 = 4_096;
 const DECODE_CACHE_BLOCKS: usize = 64;
 const DECODE_PREFETCH_BLOCKS: u64 = 3;
 const DECODE_REQUEST_CAPACITY: usize = 64;
+const LOOP_PREFETCH_RETRY_DIVISOR: u64 = 20;
 const RETIRED_PLAN_CAPACITY: usize = 8;
 pub const RENDER_PLAN_UPDATE_CAPACITY: usize = 8;
 const PREWARM_TIMEOUT: Duration = Duration::from_millis(250);
@@ -54,6 +56,7 @@ pub struct TransportControl {
     pub state: AtomicU8,
     pub frame: AtomicU64,
     pub requested_seek: AtomicU64,
+    pub loop_region: AtomicU64,
 }
 
 #[derive(Debug)]
@@ -272,6 +275,10 @@ pub struct TimelineSource {
     channel: u8,
     frame_samples: [f32; 2],
     advance_frame: bool,
+    cached_loop_region: u64,
+    loop_frames: Option<(u64, u64)>,
+    prefetched_loop: Option<(u64, u64)>,
+    next_loop_prefetch_frame: u64,
 }
 
 #[derive(Default)]
@@ -417,6 +424,10 @@ impl TimelineSource {
             channel: 0,
             frame_samples: [0.0; 2],
             advance_frame: false,
+            cached_loop_region: NO_LOOP_REGION,
+            loop_frames: None,
+            prefetched_loop: None,
+            next_loop_prefetch_frame: 0,
         })
     }
 
@@ -450,13 +461,23 @@ impl TimelineSource {
             )
         } else {
             frame
-        }
-        .min(next.plan.duration_frames);
+        };
+        let loop_region = self.transport.loop_region.load(Ordering::Acquire);
+        let maximum_frame =
+            unpack_loop_region(loop_region).map_or(next.plan.duration_frames, |(_, end_tick)| {
+                tick_to_frame(
+                    end_tick,
+                    next.plan.bpm,
+                    next.plan.ticks_per_quarter,
+                    next.plan.sample_rate,
+                )
+            });
+        let next_frame = next_frame.min(maximum_frame);
         if !next.ready_at(next_frame) {
             self.pending_update = Some(next);
             return;
         }
-        if next.remap_position || frame > next.plan.duration_frames {
+        if next.remap_position || frame > maximum_frame {
             self.transport.frame.store(next_frame, Ordering::Release);
         }
         if next.resume_if_at_end
@@ -470,6 +491,10 @@ impl TimelineSource {
         }
         next.activation_frame = Some(next_frame);
         let retired = std::mem::replace(&mut self.state, next);
+        self.cached_loop_region = NO_LOOP_REGION;
+        self.loop_frames = None;
+        self.prefetched_loop = None;
+        self.next_loop_prefetch_frame = 0;
         if let Err(retired) = self.retired.push(retired) {
             self.pending_retirement = Some(retired);
         }
@@ -477,31 +502,12 @@ impl TimelineSource {
 
     fn render_frame(&mut self) {
         self.apply_pending_update();
+        self.refresh_loop_frames();
         self.advance_frame = false;
-        let requested = self
-            .transport
-            .requested_seek
-            .swap(NO_SEEK, Ordering::AcqRel);
-        if requested != NO_SEEK {
-            self.transport.frame.store(
-                requested.min(self.state.plan.duration_frames),
-                Ordering::Release,
-            );
-        }
-        if PlaybackState::from_atomic(self.transport.state.load(Ordering::Acquire))
-            != PlaybackState::Playing
-        {
+        let Some((frame, wrapped)) = self.prepare_playback_frame() else {
             self.frame_samples = [0.0; 2];
             return;
-        }
-        let frame = self.transport.frame.load(Ordering::Acquire);
-        if frame >= self.state.plan.duration_frames {
-            self.transport
-                .state
-                .store(PlaybackState::Stopped as u8, Ordering::Release);
-            self.frame_samples = [0.0; 2];
-            return;
-        }
+        };
         let has_solo = self
             .state
             .plan
@@ -549,7 +555,7 @@ impl TimelineSource {
                     );
                     output[0] += left * clip.left_gain * left_gain * envelope;
                     output[1] += right * clip.right_gain * right_gain * envelope;
-                } else if self.state.stall_on_miss {
+                } else if self.state.stall_on_miss || wrapped {
                     frame_ready = false;
                 }
             }
@@ -567,6 +573,101 @@ impl TimelineSource {
         }
         self.frame_samples = output;
         self.advance_frame = true;
+    }
+
+    fn prepare_playback_frame(&mut self) -> Option<(u64, bool)> {
+        let requested = self
+            .transport
+            .requested_seek
+            .swap(NO_SEEK, Ordering::AcqRel);
+        if requested != NO_SEEK {
+            let maximum_frame = self
+                .loop_frames
+                .map_or(self.state.plan.duration_frames, |(_, end_frame)| end_frame);
+            self.transport
+                .frame
+                .store(requested.min(maximum_frame), Ordering::Release);
+            self.prefetched_loop = None;
+            self.next_loop_prefetch_frame = 0;
+        }
+        if PlaybackState::from_atomic(self.transport.state.load(Ordering::Acquire))
+            != PlaybackState::Playing
+        {
+            return None;
+        }
+        let (loop_start_frame, loop_end_frame) = self
+            .loop_frames
+            .unwrap_or((0, self.state.plan.duration_frames));
+        if loop_start_frame >= loop_end_frame {
+            self.transport
+                .state
+                .store(PlaybackState::Stopped as u8, Ordering::Release);
+            return None;
+        }
+        let mut frame = self.transport.frame.load(Ordering::Acquire);
+        let wrapped = frame >= loop_end_frame;
+        if wrapped {
+            frame = loop_start_frame;
+            self.transport.frame.store(frame, Ordering::Release);
+            self.prefetched_loop = None;
+            self.next_loop_prefetch_frame = 0;
+        }
+        let active_loop = (loop_start_frame, loop_end_frame);
+        if loop_end_frame.saturating_sub(frame) <= u64::from(self.state.plan.sample_rate)
+            && (self.prefetched_loop != Some(active_loop) || frame >= self.next_loop_prefetch_frame)
+        {
+            self.request_timeline_frame(loop_start_frame);
+            self.prefetched_loop = Some(active_loop);
+            self.next_loop_prefetch_frame = frame.saturating_add(
+                (u64::from(self.state.plan.sample_rate) / LOOP_PREFETCH_RETRY_DIVISOR).max(1),
+            );
+        }
+        Some((frame, wrapped))
+    }
+
+    fn refresh_loop_frames(&mut self) {
+        let loop_region = self.transport.loop_region.load(Ordering::Acquire);
+        if loop_region == self.cached_loop_region {
+            return;
+        }
+        self.cached_loop_region = loop_region;
+        self.prefetched_loop = None;
+        self.next_loop_prefetch_frame = 0;
+        self.loop_frames = unpack_loop_region(loop_region).map(|(start_tick, end_tick)| {
+            (
+                tick_to_frame(
+                    start_tick,
+                    self.state.plan.bpm,
+                    self.state.plan.ticks_per_quarter,
+                    self.state.plan.sample_rate,
+                ),
+                tick_to_frame(
+                    end_tick,
+                    self.state.plan.bpm,
+                    self.state.plan.ticks_per_quarter,
+                    self.state.plan.sample_rate,
+                ),
+            )
+        });
+    }
+
+    fn request_timeline_frame(&mut self, frame: u64) {
+        for (track, streams) in self.state.plan.tracks.iter().zip(&mut self.state.streams) {
+            for (clip, stream) in track.clips.iter().zip(streams) {
+                if frame >= clip.start_frame && frame < clip.end_frame {
+                    request_clip_frames(
+                        clip,
+                        stream,
+                        frame - clip.start_frame,
+                        self.state.plan.sample_rate,
+                    );
+                } else if clip.start_frame >= frame
+                    && clip.start_frame - frame <= u64::from(self.state.plan.sample_rate)
+                {
+                    request_clip_frames(clip, stream, 0, self.state.plan.sample_rate);
+                }
+            }
+        }
     }
 }
 
@@ -948,6 +1049,19 @@ pub fn tick_to_frame(tick: u32, bpm: f64, ticks_per_quarter: u32, sample_rate: u
     (tick_to_seconds(tick, bpm, ticks_per_quarter) * f64::from(sample_rate)).round() as u64
 }
 
+pub fn pack_loop_region(start_tick: u32, end_tick: u32) -> u64 {
+    (u64::from(start_tick) << 32) | u64::from(end_tick)
+}
+
+fn unpack_loop_region(region: u64) -> Option<(u32, u32)> {
+    (region != NO_LOOP_REGION).then(|| {
+        let start_tick = u32::try_from(region >> 32).expect("packed loop start fits in u32");
+        let end_tick =
+            u32::try_from(region & u64::from(u32::MAX)).expect("packed loop end fits in u32");
+        (start_tick, end_tick)
+    })
+}
+
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn frame_to_tick(frame: u64, bpm: f64, ticks_per_quarter: u32, sample_rate: u32) -> u32 {
     (frame_to_seconds(frame, sample_rate) * bpm * f64::from(ticks_per_quarter) / 60.0)
@@ -1163,8 +1277,9 @@ mod tests {
     use crate::workspace::{ClipStretchMode, PlaybackClip, PlaybackProject, PlaybackTrack};
 
     use super::{
-        AudioStreams, NO_SEEK, PlaybackState, PreparedRenderState, RenderPlan, TimelineSource,
-        TransportControl, clip_envelope, frame_to_tick, seconds_to_ticks, tick_to_frame,
+        AudioStreams, NO_LOOP_REGION, NO_SEEK, PlaybackState, PreparedRenderState, RenderPlan,
+        TimelineSource, TransportControl, clip_envelope, frame_to_tick, pack_loop_region,
+        seconds_to_ticks, tick_to_frame,
     };
 
     #[test]
@@ -1241,6 +1356,7 @@ mod tests {
             state: AtomicU8::new(PlaybackState::Paused as u8),
             frame: AtomicU64::new(0),
             requested_seek: AtomicU64::new(NO_SEEK),
+            loop_region: AtomicU64::new(NO_LOOP_REGION),
         });
         let mut streams = AudioStreams::default();
         let initial = PreparedRenderState::new(plan, &mut streams, false, false, false)
@@ -1286,6 +1402,7 @@ mod tests {
             state: AtomicU8::new(PlaybackState::Playing as u8),
             frame: AtomicU64::new(100),
             requested_seek: AtomicU64::new(NO_SEEK),
+            loop_region: AtomicU64::new(NO_LOOP_REGION),
         });
         let mut streams = AudioStreams::default();
         let initial =
@@ -1310,5 +1427,79 @@ mod tests {
             PlaybackState::from_atomic(transport.state.load(Ordering::Acquire)),
             PlaybackState::Playing
         );
+    }
+
+    #[test]
+    fn timeline_end_wraps_to_zero_and_keeps_playing() {
+        let (mut source, transport) = empty_timeline_source(1_000, NO_LOOP_REGION, 1_000);
+
+        assert_eq!(source.next(), Some(0.0));
+
+        assert_eq!(transport.frame.load(Ordering::Acquire), 0);
+        assert_eq!(
+            PlaybackState::from_atomic(transport.state.load(Ordering::Acquire)),
+            PlaybackState::Playing
+        );
+        assert_eq!(source.next(), Some(0.0));
+        assert_eq!(transport.frame.load(Ordering::Acquire), 1);
+    }
+
+    #[test]
+    fn loop_end_wraps_to_loop_start() {
+        let start_tick = 4;
+        let end_tick = 8;
+        let start_frame = tick_to_frame(start_tick, 120.0, 960, 48_000);
+        let end_frame = tick_to_frame(end_tick, 120.0, 960, 48_000);
+        let (mut source, transport) =
+            empty_timeline_source(1_000, pack_loop_region(start_tick, end_tick), end_frame);
+
+        assert_eq!(source.next(), Some(0.0));
+
+        assert_eq!(transport.frame.load(Ordering::Acquire), start_frame);
+        assert_eq!(source.next(), Some(0.0));
+        assert_eq!(transport.frame.load(Ordering::Acquire), start_frame + 1);
+    }
+
+    #[test]
+    fn playback_before_loop_start_advances_normally() {
+        let start_tick = 4;
+        let end_tick = 8;
+        let (mut source, transport) =
+            empty_timeline_source(1_000, pack_loop_region(start_tick, end_tick), 50);
+
+        assert_eq!(source.next(), Some(0.0));
+        assert_eq!(source.next(), Some(0.0));
+
+        assert_eq!(transport.frame.load(Ordering::Acquire), 51);
+    }
+
+    fn empty_timeline_source(
+        duration_frames: u64,
+        loop_region: u64,
+        position_frame: u64,
+    ) -> (TimelineSource, Arc<TransportControl>) {
+        let project = PlaybackProject {
+            bpm: 120.0,
+            ticks_per_quarter: 960,
+            master_gain_db: 0.0,
+            is_master_muted: false,
+            tracks: Vec::new(),
+        };
+        let mut plan = RenderPlan::build(&project, 48_000);
+        plan.duration_frames = duration_frames;
+        plan.duration_ticks = frame_to_tick(duration_frames, 120.0, 960, 48_000);
+        let transport = Arc::new(TransportControl {
+            state: AtomicU8::new(PlaybackState::Playing as u8),
+            frame: AtomicU64::new(position_frame),
+            requested_seek: AtomicU64::new(NO_SEEK),
+            loop_region: AtomicU64::new(loop_region),
+        });
+        let mut streams = AudioStreams::default();
+        let state = PreparedRenderState::new(Arc::new(plan), &mut streams, false, false, false)
+            .expect("empty source should build");
+        let source =
+            TimelineSource::new(state, Arc::clone(&transport), Arc::new(ArrayQueue::new(1)))
+                .expect("timeline source should build");
+        (source, transport)
     }
 }

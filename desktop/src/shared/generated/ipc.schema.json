@@ -9,6 +9,26 @@
       },
       "result": {
         "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          },
           "TransportState": {
             "enum": [
               "stopped",
@@ -31,6 +51,16 @@
               "null"
             ]
           },
+          "loopRegion": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "positionTick": {
             "format": "uint32",
             "minimum": 0,
@@ -43,7 +73,9 @@
         "required": [
           "state",
           "positionTick",
-          "durationTicks"
+          "durationTicks",
+          "loopRegion",
+          "lastError"
         ],
         "title": "TransportSnapshot",
         "type": "object"
@@ -58,6 +90,26 @@
       },
       "result": {
         "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          },
           "TransportState": {
             "enum": [
               "stopped",
@@ -80,6 +132,16 @@
               "null"
             ]
           },
+          "loopRegion": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "positionTick": {
             "format": "uint32",
             "minimum": 0,
@@ -92,7 +154,9 @@
         "required": [
           "state",
           "positionTick",
-          "durationTicks"
+          "durationTicks",
+          "loopRegion",
+          "lastError"
         ],
         "title": "TransportSnapshot",
         "type": "object"
@@ -107,6 +171,26 @@
       },
       "result": {
         "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          },
           "TransportState": {
             "enum": [
               "stopped",
@@ -129,6 +213,16 @@
               "null"
             ]
           },
+          "loopRegion": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "positionTick": {
             "format": "uint32",
             "minimum": 0,
@@ -141,7 +235,9 @@
         "required": [
           "state",
           "positionTick",
-          "durationTicks"
+          "durationTicks",
+          "loopRegion",
+          "lastError"
         ],
         "title": "TransportSnapshot",
         "type": "object"
@@ -166,6 +262,26 @@
       },
       "result": {
         "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          },
           "TransportState": {
             "enum": [
               "stopped",
@@ -188,6 +304,16 @@
               "null"
             ]
           },
+          "loopRegion": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "positionTick": {
             "format": "uint32",
             "minimum": 0,
@@ -200,7 +326,126 @@
         "required": [
           "state",
           "positionTick",
-          "durationTicks"
+          "durationTicks",
+          "loopRegion",
+          "lastError"
+        ],
+        "title": "TransportSnapshot",
+        "type": "object"
+      }
+    },
+    "audio.setLoopRegion": {
+      "params": {
+        "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "region": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "region"
+        ],
+        "title": "SetLoopRegionParams",
+        "type": "object"
+      },
+      "result": {
+        "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          },
+          "TransportState": {
+            "enum": [
+              "stopped",
+              "playing",
+              "paused"
+            ],
+            "type": "string"
+          }
+        },
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "properties": {
+          "durationTicks": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "lastError": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "loopRegion": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "positionTick": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "state": {
+            "$ref": "#/$defs/TransportState"
+          }
+        },
+        "required": [
+          "state",
+          "positionTick",
+          "durationTicks",
+          "loopRegion",
+          "lastError"
         ],
         "title": "TransportSnapshot",
         "type": "object"
@@ -215,6 +460,26 @@
       },
       "result": {
         "$defs": {
+          "LoopRegion": {
+            "additionalProperties": false,
+            "properties": {
+              "endTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "startTick": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "startTick",
+              "endTick"
+            ],
+            "type": "object"
+          },
           "TransportState": {
             "enum": [
               "stopped",
@@ -237,6 +502,16 @@
               "null"
             ]
           },
+          "loopRegion": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/LoopRegion"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "positionTick": {
             "format": "uint32",
             "minimum": 0,
@@ -249,7 +524,9 @@
         "required": [
           "state",
           "positionTick",
-          "durationTicks"
+          "durationTicks",
+          "loopRegion",
+          "lastError"
         ],
         "title": "TransportSnapshot",
         "type": "object"
@@ -12523,5 +12800,5 @@
       }
     }
   },
-  "protocolVersion": 14
+  "protocolVersion": 15
 }

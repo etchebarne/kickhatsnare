@@ -25,8 +25,15 @@ export function TimelinePlayhead({ leftOffset, markerRef, pixelsPerTick }: Timel
         tick +=
           (((now - receivedAt) / 1_000) * (activeTimeline.bpm * activeTimeline.ticksPerQuarter)) /
           60;
+        if (transport.loopRegion && tick >= transport.loopRegion.endTick) {
+          const loopDuration = transport.loopRegion.endTick - transport.loopRegion.startTick;
+          tick =
+            transport.loopRegion.startTick +
+            ((tick - transport.loopRegion.startTick) % loopDuration);
+        } else if (!transport.loopRegion && transport.durationTicks > 0) {
+          tick %= transport.durationTicks;
+        }
       }
-      if (transport.durationTicks > 0) tick = Math.min(tick, transport.durationTicks);
       const timelinePosition = tick * pixelsPerTick;
       if (element.current) {
         element.current.style.transform = `translate3d(${leftOffset + timelinePosition}px, 0, 0)`;

@@ -4,6 +4,7 @@ import {
   useState,
   type CSSProperties,
   type DragEvent,
+  type MouseEvent,
   type PointerEvent,
 } from "react";
 import { Plus, Trash2 } from "lucide-react";
@@ -17,10 +18,22 @@ import { cn } from "@/lib/utils";
 import { useAppStore } from "@/stores/app-store";
 import { useTimelineStore } from "@/stores/timeline-store";
 import { useTransportStore } from "@/stores/transport-store";
-import type { SaveTimelineClipParams, WorkspaceSnapshot } from "@shared/ipc";
+import type { SaveTimelineClipParams, TransportSnapshot, WorkspaceSnapshot } from "@shared/ipc";
 
 type Timeline = WorkspaceSnapshot["timeline"];
 type TimelineTrack = Timeline["tracks"][number];
+type LoopRegion = NonNullable<TransportSnapshot["loopRegion"]>;
+
+type RulerDrag =
+  | { mode: "scrub"; pointerId: number }
+  | {
+      mode: "loop";
+      pointerId: number;
+      originX: number;
+      startTick: number;
+      region: LoopRegion | null;
+      isDragging: boolean;
+    };
 
 const TRACK_HEADER_WIDTH = 208;
 const RULER_HEIGHT = 32;
@@ -29,6 +42,7 @@ const MIN_HORIZONTAL_ZOOM = 24;
 const MAX_HORIZONTAL_ZOOM = 768;
 const MIN_TRACK_HEIGHT = 44;
 const MAX_TRACK_HEIGHT = 160;
+const LOOP_DRAG_THRESHOLD = 4;
 const AUDIO_DRAG_TYPE = "application/x-kickhatsnare-audio";
 const AUDIO_EXTENSIONS = new Set([
   "aif",
@@ -55,14 +69,19 @@ export function TimelineEditor() {
   const importAudioFiles = useAppStore((state) => state.importAudioFiles);
   const tool = useTimelineStore((state) => state.tool);
   const resizeMode = useTimelineStore((state) => state.resizeMode);
+  const loopRegion = useTransportStore((state) => state.transport.loopRegion);
   const seek = useTransportStore((state) => state.seek);
+  const setLoopRegion = useTransportStore((state) => state.setLoopRegion);
   const scrollContainer = useRef<HTMLDivElement>(null);
   const playheadMarker = useRef<HTMLDivElement>(null);
+  const rulerDrag = useRef<RulerDrag | null>(null);
+  const loopOperation = useRef(0);
   const trackHeight = useRef(80);
   const horizontalZoom = useRef(96);
   const [pixelsPerQuarter, setPixelsPerQuarter] = useState(96);
   const [viewportWidth, setViewportWidth] = useState(0);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  const [previewLoopRegion, setPreviewLoopRegion] = useState<LoopRegion | null>();
   const timelineForZoom = workspace?.timeline;
   const zoomMetrics = timelineForZoom ? timelineMetrics(timelineForZoom) : null;
   const minimumHorizontalZoom = zoomMetrics
@@ -218,22 +237,76 @@ export function TimelineEditor() {
     void seek(snapTick((event.clientX - bounds.left) / pixelsPerTick));
   }
 
-  function startPlayheadDrag(event: PointerEvent<HTMLElement>) {
+  function commitLoopRegion(region: LoopRegion | null) {
+    const operation = ++loopOperation.current;
+    setPreviewLoopRegion(region);
+    void setLoopRegion(region).finally(() => {
+      if (loopOperation.current === operation) setPreviewLoopRegion(undefined);
+    });
+  }
+
+  function startRulerDrag(event: PointerEvent<HTMLElement>) {
+    if (event.button !== 0) return;
+    event.currentTarget.setPointerCapture(event.pointerId);
+    rulerDrag.current = { mode: "scrub", pointerId: event.pointerId };
+    positionPlayhead(event);
+  }
+
+  function armLoopDrag(event: MouseEvent<HTMLElement>) {
     if (event.button !== 0) return;
     event.preventDefault();
-    event.currentTarget.setPointerCapture(event.pointerId);
-    positionPlayhead(event);
+    if (event.detail !== 2 || !rulerDrag.current) return;
+    const bounds = event.currentTarget.getBoundingClientRect();
+    rulerDrag.current = {
+      mode: "loop",
+      pointerId: rulerDrag.current.pointerId,
+      originX: event.clientX,
+      startTick: snapTick((event.clientX - bounds.left) / pixelsPerTick),
+      region: null,
+      isDragging: false,
+    };
   }
 
-  function dragPlayhead(event: PointerEvent<HTMLElement>) {
-    if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    positionPlayhead(event);
+  function updateRulerDrag(event: PointerEvent<HTMLElement>) {
+    const drag = rulerDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    if (drag.mode === "scrub") {
+      positionPlayhead(event);
+      return;
+    }
+    if (!drag.isDragging && Math.abs(event.clientX - drag.originX) < LOOP_DRAG_THRESHOLD) return;
+    if (!drag.isDragging) {
+      drag.isDragging = true;
+      loopOperation.current += 1;
+    }
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const currentTick = snapTick((event.clientX - bounds.left) / pixelsPerTick);
+    drag.region = orderedLoopRegion(drag.startTick, currentTick);
+    setPreviewLoopRegion(drag.region);
   }
 
-  function finishPlayheadDrag(event: PointerEvent<HTMLElement>) {
+  function finishRulerDrag(event: PointerEvent<HTMLElement>) {
     if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-    positionPlayhead(event);
+    updateRulerDrag(event);
+    const drag = rulerDrag.current;
+    rulerDrag.current = null;
     event.currentTarget.releasePointerCapture(event.pointerId);
+    if (!drag || drag.mode === "scrub") {
+      return;
+    }
+    if (drag.isDragging && drag.region) {
+      commitLoopRegion(drag.region);
+    } else {
+      commitLoopRegion(null);
+    }
+  }
+
+  function cancelRulerDrag(event: PointerEvent<HTMLElement>) {
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+    if (rulerDrag.current?.mode === "loop") setPreviewLoopRegion(undefined);
+    rulerDrag.current = null;
   }
 
   function addTrack() {
@@ -340,6 +413,7 @@ export function TimelineEditor() {
     number: index * rulerStepBars + 1,
     left: index * rulerStepBars * ticksPerBar * pixelsPerTick,
   }));
+  const visibleLoopRegion = previewLoopRegion === undefined ? loopRegion : previewLoopRegion;
 
   return (
     <section className="flex h-full min-h-0 min-w-0 flex-col bg-background">
@@ -370,10 +444,30 @@ export function TimelineEditor() {
               data-timeline-ruler
               className="relative touch-none cursor-crosshair overflow-hidden bg-card"
               style={rulerStyle}
-              onPointerDown={startPlayheadDrag}
-              onPointerMove={dragPlayhead}
-              onPointerUp={finishPlayheadDrag}
+              title="Drag to seek. Double-click and drag to create an A/B loop; double-click to clear it."
+              onMouseDown={armLoopDrag}
+              onPointerCancel={cancelRulerDrag}
+              onPointerDown={startRulerDrag}
+              onPointerMove={updateRulerDrag}
+              onPointerUp={finishRulerDrag}
             >
+              {visibleLoopRegion ? (
+                <div
+                  className="pointer-events-none absolute inset-y-0 z-[5] border-x border-primary/70 bg-primary/15"
+                  style={{
+                    left: visibleLoopRegion.startTick * pixelsPerTick,
+                    width:
+                      (visibleLoopRegion.endTick - visibleLoopRegion.startTick) * pixelsPerTick,
+                  }}
+                >
+                  <span className="absolute bottom-0.5 left-1 font-mono text-[8px] font-semibold text-primary">
+                    A
+                  </span>
+                  <span className="absolute right-1 bottom-0.5 font-mono text-[8px] font-semibold text-primary">
+                    B
+                  </span>
+                </div>
+              ) : null}
               <div
                 ref={playheadMarker}
                 className="pointer-events-none absolute inset-y-0 left-0 z-10 w-px will-change-transform"
@@ -515,6 +609,14 @@ function isEditable(target: EventTarget | null) {
       ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName) ||
       target.closest('[data-slot="dialog-content"]') !== null)
   );
+}
+
+function orderedLoopRegion(firstTick: number, secondTick: number): LoopRegion | null {
+  if (firstTick === secondTick) return null;
+  return {
+    startTick: Math.min(firstTick, secondTick),
+    endTick: Math.max(firstTick, secondTick),
+  };
 }
 
 function timelineMetrics(timeline: Timeline) {

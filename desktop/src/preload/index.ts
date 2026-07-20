@@ -7,6 +7,7 @@ const api: KickHatSnareApi = {
   pauseAudio: () => ipcRenderer.invoke(ipcChannels.audioPause),
   playAudio: () => ipcRenderer.invoke(ipcChannels.audioPlay),
   seekAudio: (positionTick) => ipcRenderer.invoke(ipcChannels.audioSeek, positionTick),
+  setLoopRegion: (region) => ipcRenderer.invoke(ipcChannels.audioSetLoopRegion, region),
   stopAudio: () => ipcRenderer.invoke(ipcChannels.audioStop),
   ping: () => ipcRenderer.invoke(ipcChannels.ping),
   getLibrary: () => ipcRenderer.invoke(ipcChannels.libraryGet),

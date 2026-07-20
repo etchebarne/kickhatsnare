@@ -10,6 +10,7 @@ interface TransportStore {
   pause(): Promise<void>;
   stop(): Promise<void>;
   seek(positionTick: number): Promise<void>;
+  setLoopRegion(region: TransportSnapshot["loopRegion"]): Promise<void>;
   refresh(): Promise<void>;
 }
 
@@ -17,6 +18,7 @@ const initialTransport: TransportSnapshot = {
   state: "stopped",
   positionTick: 0,
   durationTicks: 0,
+  loopRegion: null,
   lastError: null,
 };
 
@@ -35,6 +37,9 @@ export const useTransportStore = create<TransportStore>((set) => ({
   },
   async seek(positionTick) {
     await command(set, () => window.kickHatSnare.seekAudio(positionTick));
+  },
+  async setLoopRegion(region) {
+    await command(set, () => window.kickHatSnare.setLoopRegion(region));
   },
   async refresh() {
     try {

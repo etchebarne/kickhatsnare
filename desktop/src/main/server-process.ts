@@ -111,6 +111,12 @@ export class CoreServer {
     return this.#request("audio.seek", params);
   }
 
+  setLoopRegion(
+    params: ParamsFor<"audio.setLoopRegion">,
+  ): Promise<ResultFor<"audio.setLoopRegion">> {
+    return this.#request("audio.setLoopRegion", params);
+  }
+
   stopAudio(): Promise<ResultFor<"audio.stop">> {
     return this.#request("audio.stop", {});
   }

@@ -55,7 +55,13 @@ export function TimelineTransportControls() {
       <Button
         size="icon-sm"
         variant="ghost"
-        aria-label={transport.state === "playing" ? "Stop" : "Stop and return to start"}
+        aria-label={
+          transport.state === "playing"
+            ? "Stop"
+            : transport.loopRegion
+              ? "Stop and return to loop start"
+              : "Stop and return to start"
+        }
         disabled={isPending}
         onClick={() => void stop()}
       >

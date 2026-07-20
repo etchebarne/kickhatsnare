@@ -1,7 +1,7 @@
 use std::{fmt, fs, path::Path};
 
 use crate::{
-    audio::{Audio, TransportSnapshot, TransportState},
+    audio::{Audio, LoopRegion, TransportSnapshot, TransportState},
     library::Library,
     settings::{AUDIO_BUFFER_SIZE_ID, SettingValue, Settings, SettingsSnapshot},
     system::System,
@@ -222,6 +222,18 @@ impl Core {
 
     pub fn seek_audio(&mut self, position_tick: u32) -> TransportSnapshot {
         self.audio.seek(position_tick)
+    }
+
+    /// Sets or clears the active A/B playback loop.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error when the loop does not have a positive duration.
+    pub fn set_audio_loop_region(
+        &mut self,
+        region: Option<LoopRegion>,
+    ) -> Result<TransportSnapshot, CoreError> {
+        self.audio.set_loop_region(region)
     }
 
     #[must_use]

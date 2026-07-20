@@ -19,12 +19,14 @@ export type SplitTimelineClipParams = ParamsFor<"workspace.splitTimelineClip">;
 export type RecoverMissingMediaParams = ParamsFor<"workspace.recoverMissingMedia">;
 export type WorkspaceFileMove = ParamsFor<"workspace.reconcileMovedFiles">["moves"][number];
 export type TransportSnapshot = ResultFor<"audio.getTransport">;
+export type SetLoopRegionParams = ParamsFor<"audio.setLoopRegion">;
 
 export const ipcChannels = {
   audioGetTransport: "audio:get-transport",
   audioPause: "audio:pause",
   audioPlay: "audio:play",
   audioSeek: "audio:seek",
+  audioSetLoopRegion: "audio:set-loop-region",
   audioStop: "audio:stop",
   libraryGet: "library:get",
   libraryPinFolder: "library:pin-folder",
@@ -68,6 +70,7 @@ export interface KickHatSnareApi {
   pauseAudio(): Promise<TransportSnapshot>;
   playAudio(): Promise<TransportSnapshot>;
   seekAudio(positionTick: number): Promise<TransportSnapshot>;
+  setLoopRegion(region: SetLoopRegionParams["region"]): Promise<TransportSnapshot>;
   stopAudio(): Promise<TransportSnapshot>;
   ping(): Promise<ResultFor<"system.ping">>;
   getLibrary(): Promise<LibrarySnapshot>;
