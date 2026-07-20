@@ -130,7 +130,6 @@ export function TimelineHeaderControls({
             size="sm"
             variant={resizeMode === "trim" ? "secondary" : "ghost"}
             aria-pressed={resizeMode === "trim"}
-            title="Cut audio when resizing clips"
             onClick={() => setResizeMode("trim")}
           >
             <Scissors /> Cut
@@ -139,7 +138,6 @@ export function TimelineHeaderControls({
             size="sm"
             variant={resizeMode === "stretch" ? "secondary" : "ghost"}
             aria-pressed={resizeMode === "stretch"}
-            title="Fit audio by stretching clips"
             onClick={() => setResizeMode("stretch")}
           >
             <UnfoldHorizontal /> Fit

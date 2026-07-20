@@ -444,7 +444,6 @@ export function TimelineEditor() {
               data-timeline-ruler
               className="relative touch-none cursor-crosshair overflow-hidden bg-card"
               style={rulerStyle}
-              title="Drag to seek. Double-click and drag to create an A/B loop; double-click to clear it."
               onMouseDown={armLoopDrag}
               onPointerCancel={cancelRulerDrag}
               onPointerDown={startRulerDrag}

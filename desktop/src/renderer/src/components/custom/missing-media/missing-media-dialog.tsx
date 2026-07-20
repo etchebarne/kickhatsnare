@@ -56,9 +56,7 @@ export function MissingMediaDialog() {
         </DialogHeader>
 
         <div className="rounded-md border bg-muted/30 px-4 py-3">
-          <p className="truncate font-mono text-xs" title={missing?.sourcePath}>
-            {missing?.sourcePath}
-          </p>
+          <p className="truncate font-mono text-xs">{missing?.sourcePath}</p>
           {remaining > 1 ? (
             <p className="mt-2 text-[11px] text-muted-foreground">
               {remaining - 1} more missing {remaining === 2 ? "file" : "files"} will be handled

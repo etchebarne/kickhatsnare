@@ -27,7 +27,6 @@ export function TimelineToolControls() {
             variant={tool === item.id ? "secondary" : "ghost"}
             aria-label={item.label}
             aria-pressed={tool === item.id}
-            title={item.label}
             onClick={() => setTool(item.id)}
           >
             <Icon />

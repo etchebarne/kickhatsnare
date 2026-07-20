@@ -12,12 +12,7 @@ export function TitleBar() {
       <nav className="no-drag h-full justify-self-start" aria-label="Application menu">
         <AppMenu />
       </nav>
-      <p
-        className="pointer-events-none px-4 text-xs font-medium text-muted-foreground"
-        title={workspace?.rootPath ?? "Unsaved project"}
-      >
-        {title}
-      </p>
+      <p className="pointer-events-none px-4 text-xs font-medium text-muted-foreground">{title}</p>
       <div className="h-full justify-self-end">
         <WindowControls />
       </div>
