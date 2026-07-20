@@ -1,4 +1,5 @@
 mod get_transport;
+mod get_waveform_peaks;
 mod pause;
 mod play;
 mod seek;
@@ -8,7 +9,9 @@ mod stop;
 use kickhatsnare_core::{Core, audio::TransportSnapshot};
 use kickhatsnare_protocol::{
     IpcMethod,
-    audio::{GetTransport, PauseAudio, PlayAudio, SeekAudio, SetLoopRegion, StopAudio},
+    audio::{
+        GetTransport, GetWaveformPeaks, PauseAudio, PlayAudio, SeekAudio, SetLoopRegion, StopAudio,
+    },
 };
 use serde_json::Value;
 
@@ -22,6 +25,7 @@ pub(super) fn dispatch(
 ) -> Result<Value, ApiError> {
     match method {
         GetTransport::NAME => get_transport::handle(params, core),
+        GetWaveformPeaks::NAME => get_waveform_peaks::handle(params, core),
         PauseAudio::NAME => pause::handle(params, core),
         PlayAudio::NAME => play::handle(params, core),
         SeekAudio::NAME => seek::handle(params, core),

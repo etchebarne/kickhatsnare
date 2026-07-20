@@ -4,6 +4,7 @@ import { ipcChannels, type KickHatSnareApi } from "../shared/ipc";
 
 const api: KickHatSnareApi = {
   getTransport: () => ipcRenderer.invoke(ipcChannels.audioGetTransport),
+  getWaveformPeaks: (params) => ipcRenderer.invoke(ipcChannels.audioGetWaveformPeaks, params),
   pauseAudio: () => ipcRenderer.invoke(ipcChannels.audioPause),
   playAudio: () => ipcRenderer.invoke(ipcChannels.audioPlay),
   seekAudio: (positionTick) => ipcRenderer.invoke(ipcChannels.audioSeek, positionTick),

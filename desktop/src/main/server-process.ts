@@ -99,6 +99,12 @@ export class CoreServer {
     return this.#request("audio.getTransport", {});
   }
 
+  getWaveformPeaks(
+    params: ParamsFor<"audio.getWaveformPeaks">,
+  ): Promise<ResultFor<"audio.getWaveformPeaks">> {
+    return this.#request("audio.getWaveformPeaks", params);
+  }
+
   pauseAudio(): Promise<ResultFor<"audio.pause">> {
     return this.#request("audio.pause", {});
   }

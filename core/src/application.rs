@@ -136,7 +136,7 @@ impl Core {
     ) -> Result<WorkspaceSnapshot, CoreError> {
         let resume_if_at_end = self.audio.transport().state == TransportState::Playing;
         let path = self.workspaces.resolve_audio_source(source_path)?;
-        let analysis = Audio::analyze(&path)?;
+        let analysis = self.audio.analyze(&path)?;
         let timeline = self.workspaces.snapshot()?.timeline;
         let duration_ticks = Audio::duration_ticks(
             analysis.duration_seconds,
@@ -178,7 +178,7 @@ impl Core {
         let before = fs::metadata(&path).map_err(|error| {
             CoreError::new(format!("failed to inspect replacement audio: {error}"))
         })?;
-        let analysis = Audio::analyze(&path)?;
+        let analysis = self.audio.analyze(&path)?;
         let after = fs::metadata(&path).map_err(|error| {
             CoreError::new(format!("failed to inspect replacement audio: {error}"))
         })?;
@@ -218,6 +218,32 @@ impl Core {
 
     pub fn stop_audio(&mut self) -> TransportSnapshot {
         self.audio.stop()
+    }
+
+    /// Returns a bounded waveform peak page for an audio source in the active workspace.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the source cannot be resolved, decoded, or the page is invalid.
+    pub fn waveform_peaks(
+        &mut self,
+        source_path: &str,
+        frames_per_peak: u32,
+        start_peak: u32,
+        peak_count: u32,
+    ) -> Result<crate::audio::WaveformPeaks, CoreError> {
+        let path = self.workspaces.resolve_audio_source(source_path)?;
+        let sidecar_path = self
+            .workspaces
+            .has_project_directory()
+            .then(|| Audio::waveform_sidecar_path(&path));
+        self.audio.waveform_peaks(
+            &path,
+            sidecar_path.as_deref(),
+            frames_per_peak,
+            start_peak,
+            peak_count,
+        )
     }
 
     pub fn seek_audio(&mut self, position_tick: u32) -> TransportSnapshot {

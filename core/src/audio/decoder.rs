@@ -1,30 +1,48 @@
-use std::{fs::File, path::Path};
+use std::{fs::File, io::BufReader, path::Path, sync::Arc, time::Duration};
 
 use rodio::{Decoder, Source};
 
+use super::waveform::{DecodedAudio, WaveformPyramid};
 use crate::CoreError;
 
-#[derive(Debug, Clone)]
-pub struct DecodedAudio {
-    pub channels: u16,
-    pub sample_rate: u32,
-    pub duration_seconds: f64,
-    pub waveform: Vec<f32>,
+pub(super) fn analyze(path: &Path) -> Result<DecodedAudio, CoreError> {
+    let decoder = open(path)?;
+    let (channels, sample_rate, duration) = metadata(&decoder, path)?;
+    Ok(DecodedAudio {
+        channels,
+        sample_rate,
+        duration_seconds: duration.as_secs_f64(),
+        waveform: Vec::new(),
+    })
 }
 
-pub fn decode(path: &Path) -> Result<DecodedAudio, CoreError> {
+pub(super) fn decode(path: &Path) -> Result<Arc<WaveformPyramid>, CoreError> {
+    let decoder = open(path)?;
+    let (channels, sample_rate, duration) = metadata(&decoder, path)?;
+    WaveformPyramid::from_samples(channels, sample_rate, duration.as_secs_f64(), decoder)
+        .map(Arc::new)
+        .ok_or_else(|| CoreError::new(format!("audio file is empty: {}", path.display())))
+}
+
+fn open(path: &Path) -> Result<Decoder<BufReader<File>>, CoreError> {
     let file = File::open(path).map_err(|error| {
         CoreError::new(format!(
             "failed to open audio file {}: {error}",
             path.display()
         ))
     })?;
-    let mut decoder = Decoder::try_from(file).map_err(|error| {
+    Decoder::try_from(file).map_err(|error| {
         CoreError::new(format!(
             "failed to decode audio file {}: {error}",
             path.display()
         ))
-    })?;
+    })
+}
+
+fn metadata(
+    decoder: &Decoder<BufReader<File>>,
+    path: &Path,
+) -> Result<(u16, u32, Duration), CoreError> {
     let channels = decoder.channels();
     let sample_rate = decoder.sample_rate();
     if !(1..=2).contains(&channels) {
@@ -45,40 +63,6 @@ pub fn decode(path: &Path) -> Result<DecodedAudio, CoreError> {
             path.display()
         )));
     }
-    let waveform = sample_waveform(&mut decoder, duration, channels);
-    Ok(DecodedAudio {
-        channels,
-        sample_rate,
-        duration_seconds: duration.as_secs_f64(),
-        waveform,
-    })
-}
 
-fn sample_waveform(
-    decoder: &mut Decoder<std::io::BufReader<File>>,
-    duration: std::time::Duration,
-    channels: u16,
-) -> Vec<f32> {
-    const BUCKET_COUNT: u32 = 128;
-    const FRAMES_PER_BUCKET: u32 = 64;
-
-    let mut waveform = Vec::with_capacity(
-        usize::try_from(BUCKET_COUNT).expect("waveform bucket count fits in usize"),
-    );
-    for bucket in 0..BUCKET_COUNT {
-        if bucket > 0 {
-            let position = duration.mul_f64(f64::from(bucket) / f64::from(BUCKET_COUNT));
-            if decoder.try_seek(position).is_err() {
-                break;
-            }
-        }
-        let sample_count = FRAMES_PER_BUCKET.saturating_mul(u32::from(channels));
-        let peak = decoder
-            .by_ref()
-            .take(usize::try_from(sample_count).expect("waveform sample count fits in usize"))
-            .fold(0.0_f32, |peak, sample| peak.max(sample.abs()))
-            .min(1.0);
-        waveform.push(peak);
-    }
-    waveform
+    Ok((channels, sample_rate, duration))
 }

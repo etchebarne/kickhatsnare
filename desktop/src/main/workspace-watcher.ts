@@ -59,7 +59,10 @@ export class WorkspaceWatcher {
     }
 
     try {
-      const watcher = watch(rootPath, { recursive: true }, () => this.#scheduleScan(true));
+      const watcher = watch(rootPath, { recursive: true }, (_event, filename) => {
+        if (filename && isWaveformSidecar(String(filename))) return;
+        this.#scheduleScan(true);
+      });
       watcher.on("error", (error) => {
         console.error(`[workspace] File watcher failed: ${error.message}`);
         watcher.close();
@@ -163,6 +166,7 @@ async function scanWorkspace(rootPath: string): Promise<WorkspaceIndex> {
       const relativePath = relativeDirectory
         ? path.posix.join(relativeDirectory, entry.name)
         : entry.name;
+      if (isWaveformSidecar(relativePath)) continue;
       let stats;
       try {
         stats = await lstat(absolutePath, { bigint: true });
@@ -196,6 +200,10 @@ async function scanWorkspace(rootPath: string): Promise<WorkspaceIndex> {
   await visit(rootPath, "");
   records.sort();
   return { byIdentity, fingerprint: records.join("\n") };
+}
+
+function isWaveformSidecar(filePath: string): boolean {
+  return filePath.includes(".khs-waveform");
 }
 
 function detectMovedFiles(

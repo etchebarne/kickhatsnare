@@ -1,4 +1,5 @@
 mod get_transport;
+mod get_waveform_peaks;
 mod pause;
 mod play;
 mod seek;
@@ -6,6 +7,7 @@ mod set_loop_region;
 mod stop;
 
 pub use get_transport::{GetTransport, GetTransportParams};
+pub use get_waveform_peaks::{GetWaveformPeaks, GetWaveformPeaksParams, WaveformPeaks};
 pub use pause::{PauseAudio, PauseAudioParams};
 pub use play::{PlayAudio, PlayAudioParams};
 pub use seek::{SeekAudio, SeekAudioParams};
@@ -61,6 +63,7 @@ fn nullable_string_schema(generator: &mut SchemaGenerator) -> Schema {
 pub(crate) fn methods() -> Vec<ContractMethod> {
     vec![
         describe::<GetTransport>(),
+        describe::<GetWaveformPeaks>(),
         describe::<PauseAudio>(),
         describe::<PlayAudio>(),
         describe::<SeekAudio>(),

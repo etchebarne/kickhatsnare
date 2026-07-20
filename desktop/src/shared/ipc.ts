@@ -20,9 +20,12 @@ export type RecoverMissingMediaParams = ParamsFor<"workspace.recoverMissingMedia
 export type WorkspaceFileMove = ParamsFor<"workspace.reconcileMovedFiles">["moves"][number];
 export type TransportSnapshot = ResultFor<"audio.getTransport">;
 export type SetLoopRegionParams = ParamsFor<"audio.setLoopRegion">;
+export type GetWaveformPeaksParams = ParamsFor<"audio.getWaveformPeaks">;
+export type WaveformPeaks = ResultFor<"audio.getWaveformPeaks">;
 
 export const ipcChannels = {
   audioGetTransport: "audio:get-transport",
+  audioGetWaveformPeaks: "audio:get-waveform-peaks",
   audioPause: "audio:pause",
   audioPlay: "audio:play",
   audioSeek: "audio:seek",
@@ -67,6 +70,7 @@ export const ipcChannels = {
 
 export interface KickHatSnareApi {
   getTransport(): Promise<TransportSnapshot>;
+  getWaveformPeaks(params: GetWaveformPeaksParams): Promise<WaveformPeaks>;
   pauseAudio(): Promise<TransportSnapshot>;
   playAudio(): Promise<TransportSnapshot>;
   seekAudio(positionTick: number): Promise<TransportSnapshot>;

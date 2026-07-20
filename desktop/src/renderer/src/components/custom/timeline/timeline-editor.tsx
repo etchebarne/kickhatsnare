@@ -79,7 +79,8 @@ export function TimelineEditor() {
   const trackHeight = useRef(80);
   const horizontalZoom = useRef(96);
   const [pixelsPerQuarter, setPixelsPerQuarter] = useState(96);
-  const [viewportWidth, setViewportWidth] = useState(0);
+  const [viewport, setViewport] = useState({ width: 0, scrollLeft: 0 });
+  const viewportWidth = viewport.width;
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
   const [previewLoopRegion, setPreviewLoopRegion] = useState<LoopRegion | null>();
   const timelineForZoom = workspace?.timeline;
@@ -98,10 +99,32 @@ export function TimelineEditor() {
   useEffect(() => {
     const container = scrollContainer.current;
     if (!container || !timelineForZoom) return;
-    const observer = new ResizeObserver(() => setViewportWidth(container.clientWidth));
-    observer.observe(container);
-    setViewportWidth(container.clientWidth);
-    return () => observer.disconnect();
+    const activeContainer = container;
+    let animationFrame: number | undefined;
+    function updateViewport() {
+      if (animationFrame !== undefined) return;
+      animationFrame = window.requestAnimationFrame(() => {
+        animationFrame = undefined;
+        setViewport((current) => {
+          const next = {
+            width: activeContainer.clientWidth,
+            scrollLeft: activeContainer.scrollLeft,
+          };
+          return current.width === next.width && current.scrollLeft === next.scrollLeft
+            ? current
+            : next;
+        });
+      });
+    }
+    const observer = new ResizeObserver(updateViewport);
+    observer.observe(activeContainer);
+    activeContainer.addEventListener("scroll", updateViewport, { passive: true });
+    updateViewport();
+    return () => {
+      observer.disconnect();
+      activeContainer.removeEventListener("scroll", updateViewport);
+      if (animationFrame !== undefined) window.cancelAnimationFrame(animationFrame);
+    };
   }, [timelineForZoom]);
 
   useEffect(() => {
@@ -224,6 +247,8 @@ export function TimelineEditor() {
   );
   const gridTicks = automaticGrid.ticks;
   const timelineWidth = totalTicks * pixelsPerTick;
+  const visibleTimelineWidth = Math.max(0, viewport.width - TRACK_HEADER_WIDTH);
+  const viewportOverscan = visibleTimelineWidth;
   const laneStyle = timelineGridStyle(automaticGrid, pixelsPerTick);
   const rulerStyle = timelineGridStyle(automaticGrid, pixelsPerTick, 0.35);
 
@@ -556,36 +581,48 @@ export function TimelineEditor() {
                 onDragOver={handleAudioDragOver}
                 onDrop={(event) => handleAudioDrop(event, track)}
               >
-                {track.clips.map((clip) => (
-                  <TimelineClip
-                    key={clip.id}
-                    clip={clip}
-                    trackId={track.id}
-                    pixelsPerTick={pixelsPerTick}
-                    gridTicks={gridTicks}
-                    sourceDurationTicks={
-                      clip.sourcePath
-                        ? Math.max(
-                            1,
-                            Math.round(
-                              (clip.sourceDurationSeconds *
-                                timeline.bpm *
-                                timeline.ticksPerQuarter) /
-                                60,
-                            ),
-                          )
-                        : null
-                    }
-                    selected={clip.id === selectedClipId}
-                    tool={tool}
-                    resizeMode={resizeMode}
-                    onSelect={setSelectedClipId}
-                    onCommit={commitClip}
-                    onSetProperties={setTimelineClipProperties}
-                    onDelete={removeClip}
-                    onSplit={splitClip}
-                  />
-                ))}
+                {track.clips
+                  .filter((clip) => {
+                    if (viewport.width === 0) return true;
+                    const left = clip.startTick * pixelsPerTick;
+                    const right = left + Math.max(16, clip.durationTicks * pixelsPerTick);
+                    return (
+                      right >= viewport.scrollLeft - viewportOverscan &&
+                      left <= viewport.scrollLeft + visibleTimelineWidth + viewportOverscan
+                    );
+                  })
+                  .map((clip) => (
+                    <TimelineClip
+                      key={clip.id}
+                      clip={clip}
+                      trackId={track.id}
+                      pixelsPerTick={pixelsPerTick}
+                      gridTicks={gridTicks}
+                      sourceDurationTicks={
+                        clip.sourcePath
+                          ? Math.max(
+                              1,
+                              Math.round(
+                                (clip.sourceDurationSeconds *
+                                  timeline.bpm *
+                                  timeline.ticksPerQuarter) /
+                                  60,
+                              ),
+                            )
+                          : null
+                      }
+                      viewportStart={viewport.scrollLeft}
+                      viewportWidth={visibleTimelineWidth}
+                      selected={clip.id === selectedClipId}
+                      tool={tool}
+                      resizeMode={resizeMode}
+                      onSelect={setSelectedClipId}
+                      onCommit={commitClip}
+                      onSetProperties={setTimelineClipProperties}
+                      onDelete={removeClip}
+                      onSplit={splitClip}
+                    />
+                  ))}
               </div>
             </div>
           ))}

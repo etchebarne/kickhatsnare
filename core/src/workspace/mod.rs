@@ -583,6 +583,11 @@ impl Workspaces {
             })
     }
 
+    #[must_use]
+    pub fn has_project_directory(&self) -> bool {
+        self.active.root_path.is_some()
+    }
+
     /// Materializes the active project in a new workspace directory.
     ///
     /// # Errors
@@ -1738,6 +1743,12 @@ fn collect_files(
             ))
         })?;
         let path = entry.path();
+        if path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().contains(".khs-waveform"))
+        {
+            continue;
+        }
         let file_type = entry.file_type().map_err(|error| {
             CoreError::new(format!(
                 "failed to inspect project entry {}: {error}",
@@ -1787,6 +1798,23 @@ mod tests {
         assert!((snapshot.timeline.bpm - 120.0).abs() < f64::EPSILON);
         assert_eq!(snapshot.timeline.tracks.len(), 10);
         assert!(!snapshot.is_dirty);
+    }
+
+    #[test]
+    fn hides_waveform_sidecars_from_project_files() {
+        let directory = tempdir().expect("temporary directory should be created");
+        fs::write(directory.path().join("sample.wav"), b"audio")
+            .expect("audio file should be written");
+        fs::write(
+            directory.path().join("sample.wav.khs-waveform"),
+            b"waveform",
+        )
+        .expect("waveform sidecar should be written");
+
+        let files = super::collect_workspace_files(directory.path(), None)
+            .expect("workspace files should be collected");
+
+        assert_eq!(files, ["sample.wav"]);
     }
 
     #[test]

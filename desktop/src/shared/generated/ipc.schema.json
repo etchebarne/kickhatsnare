@@ -81,6 +81,108 @@
         "type": "object"
       }
     },
+    "audio.getWaveformPeaks": {
+      "params": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "additionalProperties": false,
+        "properties": {
+          "framesPerPeak": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "peakCount": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          },
+          "sourcePath": {
+            "type": "string"
+          },
+          "startPeak": {
+            "format": "uint32",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "sourcePath",
+          "framesPerPeak",
+          "startPeak",
+          "peakCount"
+        ],
+        "title": "GetWaveformPeaksParams",
+        "type": "object"
+      },
+      "result": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "oneOf": [
+          {
+            "properties": {
+              "status": {
+                "const": "loading",
+                "type": "string"
+              }
+            },
+            "required": [
+              "status"
+            ],
+            "type": "object"
+          },
+          {
+            "properties": {
+              "framesPerPeak": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "maximums": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "minimums": {
+                "items": {
+                  "format": "float",
+                  "type": "number"
+                },
+                "type": "array"
+              },
+              "sourceVersion": {
+                "type": "string"
+              },
+              "startPeak": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              },
+              "status": {
+                "const": "ready",
+                "type": "string"
+              },
+              "totalPeaks": {
+                "format": "uint32",
+                "minimum": 0,
+                "type": "integer"
+              }
+            },
+            "required": [
+              "status",
+              "sourceVersion",
+              "framesPerPeak",
+              "startPeak",
+              "totalPeaks",
+              "minimums",
+              "maximums"
+            ],
+            "type": "object"
+          }
+        ],
+        "title": "WaveformPeaks"
+      }
+    },
     "audio.pause": {
       "params": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
@@ -12800,5 +12902,5 @@
       }
     }
   },
-  "protocolVersion": 15
+  "protocolVersion": 17
 }

@@ -198,6 +198,9 @@ app.whenReady().then(async () => {
     }
   });
   ipcMain.handle(ipcChannels.audioGetTransport, () => getCoreServer().getTransport());
+  ipcMain.handle(ipcChannels.audioGetWaveformPeaks, (_event, params) =>
+    getCoreServer().getWaveformPeaks(params),
+  );
   ipcMain.handle(ipcChannels.audioPause, () => getCoreServer().pauseAudio());
   ipcMain.handle(ipcChannels.audioPlay, () => getCoreServer().playAudio());
   ipcMain.handle(ipcChannels.audioSeek, (_event, positionTick: number) =>
@@ -294,6 +297,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   ipcMain.removeHandler(ipcChannels.audioGetTransport);
+  ipcMain.removeHandler(ipcChannels.audioGetWaveformPeaks);
   ipcMain.removeHandler(ipcChannels.audioPause);
   ipcMain.removeHandler(ipcChannels.audioPlay);
   ipcMain.removeHandler(ipcChannels.audioSeek);

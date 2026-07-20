@@ -47,6 +47,8 @@ interface TimelineClipProps {
   pixelsPerTick: number;
   gridTicks: number;
   sourceDurationTicks: number | null;
+  viewportStart: number;
+  viewportWidth: number;
   selected: boolean;
   tool: TimelineTool;
   resizeMode: TimelineResizeMode;
@@ -63,6 +65,8 @@ export function TimelineClip({
   pixelsPerTick,
   gridTicks,
   sourceDurationTicks,
+  viewportStart,
+  viewportWidth,
   selected,
   tool,
   resizeMode,
@@ -79,6 +83,14 @@ export function TimelineClip({
   const highlightedLane = useRef<HTMLElement | null>(null);
   const cutPreview = useRef<HTMLDivElement>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const clipLeft = clip.startTick * pixelsPerTick;
+  const clipWidth = Math.max(16, clip.durationTicks * pixelsPerTick);
+  const waveformLeft = Math.max(0, viewportStart - clipLeft);
+  const waveformWidth = Math.max(
+    0,
+    Math.min(clipWidth, viewportStart + viewportWidth - clipLeft) - waveformLeft,
+  );
+  const waveformKey = waveformSourceKey(clip);
 
   useEffect(() => {
     resetVisual();
@@ -383,8 +395,8 @@ export function TimelineClip({
                 : "border-border bg-secondary text-secondary-foreground hover:border-foreground/30",
             )}
             style={{
-              left: clip.startTick * pixelsPerTick,
-              width: Math.max(16, clip.durationTicks * pixelsPerTick),
+              left: clipLeft,
+              width: clipWidth,
             }}
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
@@ -393,12 +405,19 @@ export function TimelineClip({
             onPointerCancel={cancelDrag}
             onFocus={() => onSelect(clip.id)}
           >
-            {clip.sourcePath && sourceDurationTicks ? (
+            {clip.sourcePath && sourceDurationTicks && waveformWidth > 0 ? (
               <ClipWaveform
-                peaks={clip.waveform}
+                key={waveformKey}
+                sourcePath={clip.sourcePath}
+                sourceKey={waveformKey}
+                sampleRate={clip.sourceSampleRate}
+                sourceDurationSeconds={clip.sourceDurationSeconds}
                 sourceOffsetTicks={clip.sourceOffsetTicks}
-                durationTicks={clip.sourceDurationTicks}
+                sourceWindowTicks={clip.sourceDurationTicks}
                 sourceDurationTicks={sourceDurationTicks}
+                clipWidth={clipWidth}
+                visibleLeft={waveformLeft}
+                visibleWidth={waveformWidth}
               />
             ) : null}
             {tool === "cut" ? (
@@ -502,6 +521,20 @@ export function TimelineClip({
       ) : null}
     </>
   );
+}
+
+function waveformSourceKey(clip: TimelineClipData) {
+  const middle = clip.waveform[Math.floor(clip.waveform.length / 2)] ?? 0;
+  return [
+    clip.sourcePath,
+    clip.sourceSampleRate,
+    clip.sourceChannels,
+    clip.sourceDurationSeconds,
+    clip.waveform.length,
+    clip.waveform[0] ?? 0,
+    middle,
+    clip.waveform.at(-1) ?? 0,
+  ].join(":");
 }
 
 function trackLaneAt(x: number, y: number) {

@@ -1,16 +1,19 @@
 mod decoder;
 mod renderer;
+mod waveform;
 
 use std::{fmt, path::Path, sync::Arc};
 
 use crossbeam_queue::ArrayQueue;
 use rodio::{OutputStream, OutputStreamBuilder, cpal::BufferSize};
 
-pub use decoder::DecodedAudio;
 use renderer::{
     AudioStreams, NO_LOOP_REGION, NO_SEEK, PlaybackState, PreparedRenderState,
     RENDER_PLAN_UPDATE_CAPACITY, RenderPlan, TimelineSource, TransportControl, frame_to_tick,
     pack_loop_region, seconds_to_ticks, tick_to_frame,
+};
+pub use waveform::{
+    BASE_FRAMES_PER_PEAK, DecodedAudio, MAX_WAVEFORM_PEAKS_PER_REQUEST, WaveformPeaks,
 };
 
 use crate::{
@@ -46,6 +49,7 @@ pub struct Audio {
     loop_region: Option<LoopRegion>,
     last_error: Option<String>,
     buffer_size: u32,
+    waveforms: waveform::WaveformCache,
 }
 
 struct PlaybackSession {
@@ -65,6 +69,7 @@ impl fmt::Debug for Audio {
             .field("loop_region", &self.loop_region)
             .field("last_error", &self.last_error)
             .field("buffer_size", &self.buffer_size)
+            .field("waveforms", &self.waveforms)
             .finish()
     }
 }
@@ -84,6 +89,7 @@ impl Audio {
             loop_region: None,
             last_error: None,
             buffer_size,
+            waveforms: waveform::WaveformCache::default(),
         }
     }
 
@@ -91,13 +97,35 @@ impl Audio {
         self.buffer_size = buffer_size;
     }
 
-    /// Decodes an audio source and returns metadata plus bounded waveform peaks.
+    /// Reads metadata required to place an audio source on the timeline.
     ///
     /// # Errors
     ///
     /// Returns an error if the file cannot be decoded as mono or stereo audio.
-    pub fn analyze(path: &Path) -> Result<DecodedAudio, CoreError> {
-        decoder::decode(path)
+    pub fn analyze(&self, path: &Path) -> Result<DecodedAudio, CoreError> {
+        decoder::analyze(path)
+    }
+
+    /// Returns a bounded page from the source's signed min/max waveform pyramid.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if the source cannot be decoded or the requested page is invalid.
+    pub fn waveform_peaks(
+        &mut self,
+        path: &Path,
+        sidecar_path: Option<&Path>,
+        frames_per_peak: u32,
+        start_peak: u32,
+        peak_count: u32,
+    ) -> Result<WaveformPeaks, CoreError> {
+        self.waveforms
+            .peaks(path, sidecar_path, frames_per_peak, start_peak, peak_count)
+    }
+
+    #[must_use]
+    pub fn waveform_sidecar_path(path: &Path) -> std::path::PathBuf {
+        waveform::sidecar_path(path)
     }
 
     /// Starts or resumes playback of a project.
